@@ -82,22 +82,29 @@ export class RecipientModule {
   }
 
   public async downloadMessages(mediatorConnection?: ConnectionRecord) {
-    const mediationRecord: MediationRecord | undefined = await this.recipientService.getDefaultMediator()
-    if (mediationRecord) {
-      let connection: ConnectionRecord = await this.connectionService.getById(mediationRecord.connectionId)
-      connection = assertConnection(connection, 'connection not found for default mediator')
-      const batchPickupMessage = new BatchPickupMessage({ batchSize: 10 })
-      const outboundMessage = createOutboundMessage(connection, batchPickupMessage)
-      outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
-      await this.messageSender.sendMessage(outboundMessage)
+    if (!mediatorConnection) {
+      const mediationRecord = await this.recipientService.getDefaultMediator()
+      if (mediationRecord) {
+        mediatorConnection = await this.connectionService.getById(mediationRecord.connectionId)
+      }
     }
+
+    mediatorConnection = assertConnection(mediatorConnection, 'connection not found for specified mediator')
+    const batchPickupMessage = new BatchPickupMessage({ batchSize: 10 })
+    const outboundMessage = createOutboundMessage(mediatorConnection, batchPickupMessage)
+    outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
+    await this.messageSender.sendMessage(outboundMessage)
   }
 
-  public async requestMediation(connection: ConnectionRecord) {
+  public async setDefaultMediator(mediator: MediationRecord) {
+    await this.recipientService.setDefaultMediator(mediator)
+  }
+
+  public async requestMediation(connection: ConnectionRecord): Promise<MediationRecord> {
     const [record, message] = await this.recipientService.createRequest(connection)
     const outboundMessage = createOutboundMessage(connection, message)
-    const response = await this.messageSender.sendMessage(outboundMessage)
-    return response
+    await this.messageSender.sendMessage(outboundMessage)
+    return record
   }
 
   public async notifyKeylistUpdate(connection: ConnectionRecord, verkey?: Verkey) {
@@ -183,13 +190,13 @@ export class RecipientModule {
   }
 
   private registerListeners() {
-    this.eventEmitter.on<KeylistUpdateEvent>(RoutingEventTypes.MediationKeylistUpdate, this.keylistUpdateEvent)
-  }
-
-  private async keylistUpdateEvent({ payload: { mediationRecord, message } }: KeylistUpdateEvent) {
-    // new did has been created and mediator needs to be updated with the public key.
-    const connectionRecord: ConnectionRecord = await this.connectionService.getById(mediationRecord.connectionId)
-    const outbound = createOutboundMessage(connectionRecord, message)
-    await this.messageSender.sendMessage(outbound)
+    this.eventEmitter.on(RoutingEventTypes.MediationKeylistUpdate, async (event: KeylistUpdateEvent) => {
+      // new did has been created and mediator needs to be updated with the public key.
+      const connectionRecord: ConnectionRecord = await this.connectionService.getById(
+        event.payload.mediationRecord.connectionId
+      )
+      const outbound = createOutboundMessage(connectionRecord, event.payload.message)
+      await this.messageSender.sendMessage(outbound)
+    })
   }
 }

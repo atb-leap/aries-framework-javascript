@@ -12,6 +12,7 @@ import { ConnectionService } from '../connections'
 import { MediationRecord } from '.'
 import { MediationRequestHandler } from './handlers/MediationRequestHandler'
 import { EventEmitter } from '../../agent/EventEmitter'
+import { RoutingEventTypes, ForwardEvent, MediationKeylistEvent } from './RoutingEvents'
 
 @scoped(Lifecycle.ContainerScoped)
 export class MediatorModule {
@@ -35,6 +36,7 @@ export class MediatorModule {
     this.messageSender = messageSender
     this.eventEmitter = eventEmitter
     this.registerHandlers(dispatcher)
+    this.registerListeners()
   }
 
   public async init() {
@@ -53,22 +55,30 @@ export class MediatorModule {
     return response
   }
 
-  // TODO - Belongs in connections.
-  public async acceptRequest(connectionId: string): Promise<ConnectionRecord> {
-    const { message, connectionRecord: connectionRecord } = await this.connectionService.createResponse(connectionId)
-
-    const outbound = createOutboundMessage(connectionRecord, message)
-    await this.messageSender.sendMessage(outbound)
-
-    return connectionRecord
-  }
-
   private registerHandlers(dispatcher: Dispatcher) {
     dispatcher.registerHandler(new KeylistUpdateHandler(this.mediatorService))
     dispatcher.registerHandler(new ForwardHandler(this.mediatorService))
     dispatcher.registerHandler(new BatchPickupHandler(this.messagePickupService))
     dispatcher.registerHandler(new BatchHandler(this.eventEmitter))
     dispatcher.registerHandler(new MediationRequestHandler(this.mediatorService))
+  }
+
+  private registerListeners() {
+    this.eventEmitter.on(RoutingEventTypes.Forward, async (event: ForwardEvent) => {
+      // TODO: Other checks (verKey, theirKey, etc.)
+      const connectionRecord: ConnectionRecord = await this.connectionService.getById(event.payload.connectionId)
+      const outbound = createOutboundMessage(connectionRecord, event.payload.message)
+      await this.messageSender.sendMessage(outbound)
+    })
+
+    this.eventEmitter.on(RoutingEventTypes.MediationKeylist, async (event: MediationKeylistEvent) => {
+      const connectionRecord: ConnectionRecord = await this.connectionService.getById(
+        event.payload.mediationRecord.connectionId
+      )
+      const message = await this.mediatorService.createKeylistUpdateResponseMessage(event.payload.keylist)
+      const outbound = createOutboundMessage(connectionRecord, message)
+      await this.messageSender.sendMessage(outbound)
+    })
   }
 }
 

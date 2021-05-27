@@ -45,10 +45,7 @@ export class ConnectionsModule {
     this.registerHandlers(dispatcher)
   }
 
-  public async createConnection(config?: {
-    autoAcceptConnection?: boolean
-    alias?: string
-  }): Promise<{
+  public async createConnection(config?: { autoAcceptConnection?: boolean; alias?: string }): Promise<{
     invitation: ConnectionInvitationMessage
     connectionRecord: ConnectionRecord
   }> {
@@ -83,11 +80,9 @@ export class ConnectionsModule {
       mediatorId: config?.mediatorId,
     })
 
-    if (this.agentConfig.getEndpoint() == DID_COMM_TRANSPORT_QUEUE) {
-      const {
-        message: connectionRequest,
-        connectionRecord: connectionRecord,
-      } = await this.connectionService.createRequest(connection.id)
+    if (!config?.mediatorId && this.agentConfig.getEndpoint() == DID_COMM_TRANSPORT_QUEUE) {
+      const { message: connectionRequest, connectionRecord: connectionRecord } =
+        await this.connectionService.createRequest(connection.id)
 
       const outboundMessage = createOutboundMessage(connectionRecord, connectionRequest, connectionRecord.invitation)
       outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
@@ -119,6 +114,7 @@ export class ConnectionsModule {
     config?: {
       autoAcceptConnection?: boolean
       alias?: string
+      mediatorId?: string
     }
   ): Promise<ConnectionRecord> {
     const invitation = await ConnectionInvitationMessage.fromUrl(invitationUrl)

@@ -2,6 +2,7 @@ import type { Verkey } from 'indy-sdk'
 
 import { BaseEvent } from '../../agent/Events'
 import { ConnectionRecord } from '../connections'
+import { ForwardMessage } from './messages'
 import { KeylistUpdateMessage } from './messages/KeylistUpdateMessage'
 import { KeylistUpdated } from './messages/KeylistUpdateResponseMessage'
 import { MediationState } from './models/MediationState'
@@ -12,6 +13,8 @@ export enum RoutingEventTypes {
   MediationGranted = 'MediationGranted',
   MediationKeylist = 'MediationKeylist',
   MediationKeylistUpdate = 'MediationKeylistUpdate',
+  MediationKeylistUpdated = 'MediationKeylistUpdated',
+  Forward = 'Forward',
 }
 
 export interface MediationGrantedEvent extends BaseEvent {
@@ -44,5 +47,21 @@ export interface KeylistUpdateEvent extends BaseEvent {
   payload: {
     mediationRecord: MediationRecord
     message: KeylistUpdateMessage
+  }
+}
+
+export interface KeylistUpdatedEvent extends BaseEvent {
+  type: typeof RoutingEventTypes.MediationKeylistUpdated
+  payload: {
+    mediationRecord: MediationRecord
+    keylist: KeylistUpdated[]
+  }
+}
+
+export interface ForwardEvent extends BaseEvent {
+  type: typeof RoutingEventTypes.Forward
+  payload: {
+    connectionId: string
+    message: ForwardMessage
   }
 }

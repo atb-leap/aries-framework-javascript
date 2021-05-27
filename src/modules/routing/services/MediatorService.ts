@@ -11,6 +11,7 @@ import {
   KeylistUpdated,
   MediationGrantMessage,
   MediationRequestMessage,
+  KeylistUpdateResponseMessage,
 } from '../messages'
 import { MediationRole } from '../models/MediationRole'
 import { MediationState } from '../models/MediationState'
@@ -22,7 +23,7 @@ import { Wallet } from '../../../wallet/Wallet'
 import { HandlerInboundMessage } from '../../../agent/Handler'
 import { ForwardHandler } from '../handlers'
 import { uuid } from '../../../utils/uuid'
-import { MediationKeylistEvent, MediationStateChangedEvent, RoutingEventTypes } from '../RoutingEvents'
+import { ForwardEvent, MediationKeylistEvent, MediationStateChangedEvent, RoutingEventTypes } from '../RoutingEvents'
 import { EventEmitter } from '../../../agent/EventEmitter'
 import { AriesFrameworkError } from '../../../error'
 import { Symbols } from '../../../symbols'
@@ -60,7 +61,26 @@ export class MediatorService {
   }
 
   public async processForwardMessage(messageContext: HandlerInboundMessage<ForwardHandler>) {
-    throw new Error('Method not implemented.')
+    const { message, recipientVerkey } = messageContext
+
+    // TODO: update to class-validator validation
+    if (!message.to) {
+      throw new Error('Invalid Message: Missing required attribute "to"')
+    }
+
+    const connectionId = await this.findRecipient(message.to)
+    if (connectionId) {
+      // Emit event to be handled by MediatorModule
+      this.eventEmitter.emit<ForwardEvent>({
+        type: RoutingEventTypes.Forward,
+        payload: {
+          connectionId,
+          message,
+        },
+      })
+    } else {
+      throw new Error(`Connection for verkey ${recipientVerkey} not found!`)
+    }
   }
 
   public async processKeylistUpdateRequest(messageContext: InboundMessageContext<KeylistUpdateMessage>) {
@@ -85,8 +105,6 @@ export class MediatorService {
         updated.push(update_)
       }
     }
-    // TODO: catch event in module and create/send message
-    //const responseMessage = new KeylistUpdateResponseMessage({ updated })
     this.eventEmitter.emit<MediationKeylistEvent>({
       type: RoutingEventTypes.MediationKeylist,
       payload: {
@@ -120,7 +138,7 @@ export class MediatorService {
   public async findRecipient(recipientKey: Verkey): Promise<string | null> {
     const records = await this.getAll()
     for (const record of records) {
-      for (const key in record.recipientKeys) {
+      for (const key of record.recipientKeys) {
         if (recipientKey == key) {
           return record.connectionId
         }
@@ -132,6 +150,13 @@ export class MediatorService {
   public async findRecipientByConnectionId(connectionId: string): Promise<MediationRecord | null> {
     const records = await this.mediationRepository.findByQuery({ connectionId })
     return records[0]
+  }
+
+  public async createKeylistUpdateResponseMessage(keylist: KeylistUpdated[]): Promise<KeylistUpdateResponseMessage> {
+    const keylistUpdateMessage = new KeylistUpdateResponseMessage({
+      updated: keylist,
+    })
+    return keylistUpdateMessage
   }
 
   public async createGrantMediationMessage(mediation: MediationRecord): Promise<MediationGrantMessage> {
@@ -149,7 +174,6 @@ export class MediatorService {
   }
 
   public async processMediationRequest(messageContext: InboundMessageContext<MediationRequestMessage>) {
-    const { message } = messageContext
     // Assert connection
     const connection = this._assertConnection(messageContext.connection, ForwardMessage)
 
@@ -163,8 +187,13 @@ export class MediatorService {
     )
     await this.updateState(mediationRecord, MediationState.Init)
 
-    // Mediation can be either granted or denied. Someday, let business logic decide that
-    this.createGrantMediationMessage(mediationRecord)
+    // Mediation can be either granted or denied. If auto-accept is not enabled, let framework controller
+    // logic decide that later on
+    if (this.agentConfig.autoAcceptMediationRequests) {
+      this.createGrantMediationMessage(mediationRecord)
+    } else {
+      await this.updateState(mediationRecord, MediationState.Requested)
+    }
   }
 
   public async findByConnectionId(id: string): Promise<MediationRecord | null> {
