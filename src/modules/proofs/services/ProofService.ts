@@ -841,7 +841,7 @@ export class ProofService {
     return proof
   }
 
-  private async getCredentialsForProofRequest(
+  public async getCredentialsForProofRequest(
     proofRequest: ProofRequest,
     attributeReferent: string
   ): Promise<Credential[]> {

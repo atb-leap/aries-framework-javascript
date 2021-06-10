@@ -210,6 +210,19 @@ export class ProofsModule {
   }
 
   /**
+   * @param proofRequest the proof request to get the credentials from
+   * @param attributeReferent the referent string
+   * 
+   * @returns An array of credentials
+   */
+  public async getCredentialsForProofRequest(
+    proofRequest: ProofRequest,
+    attributeReferent: string
+  ) {
+    return this.proofService.getCredentialsForProofRequest(proofRequest,attributeReferent)
+  }
+
+  /**
    * Retrieve all proof records
    *
    * @returns List containing all proof records

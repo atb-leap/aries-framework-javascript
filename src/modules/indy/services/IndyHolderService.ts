@@ -108,7 +108,7 @@ export class IndyHolderService {
     const searchHandle = await this.indy.proverSearchCredentialsForProofReq(
       this.indyWallet.walletHandle,
       proofRequest,
-      extraQuery ?? null
+      extraQuery ?? {}
     )
 
     try {
