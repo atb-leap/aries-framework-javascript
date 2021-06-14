@@ -96,7 +96,7 @@ describe('mediator establishment', () => {
     expect(mediatorAgentConnection.isReady)
     //console.log('Connections established')
 
-    let mediationRecord: MediationRecord = await recipientAgent.mediationRecipient.requestAndWaitForAcception(
+    const mediationRecord: MediationRecord = await recipientAgent.mediationRecipient.requestAndWaitForAcception(
       recipientAgentConnection
     )
     expect(mediationRecord.state).toBe(MediationState.Granted)
@@ -140,7 +140,7 @@ describe('mediator establishment', () => {
     expect(mediatorAgentConnection.isReady)
 
     //console.log('Connected, requesting and waiting for accept')
-    let mediationRecord: MediationRecord = await recipientAgent.mediationRecipient.requestAndWaitForAcception(
+    const mediationRecord: MediationRecord = await recipientAgent.mediationRecipient.requestAndWaitForAcception(
       recipientAgentConnection
     )
     expect(mediationRecord.state).toBe(MediationState.Granted)
@@ -217,7 +217,7 @@ describe('mediator features', () => {
   })
   test('recipient and Ted make a connection via mediator', async () => {
     await recipientAgent.mediationRecipient.setDefaultMediator(mediationRecord)
-    let { invitation, connectionRecord: agentAConnection } = await recipientAgent.connections.createConnection({
+    const { invitation, connectionRecord: agentAConnection } = await recipientAgent.connections.createConnection({
       autoAcceptConnection: true,
       mediatorId: mediationRecord.id,
     })
