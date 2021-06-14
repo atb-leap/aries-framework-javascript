@@ -15,7 +15,7 @@ import {
   ForwardEvent,
   MediationKeylistEvent,
   MediationRecord,
-} from '.'
+} from './index'
 import { MediationRequestHandler } from './handlers/MediationRequestHandler'
 import { EventEmitter } from '../../agent/EventEmitter'
 
