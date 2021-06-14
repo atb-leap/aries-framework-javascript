@@ -330,7 +330,9 @@ export class mockInBoundTransporter implements InboundTransporter {
         res.status(200).end()
       }
     })
-    this.server = this.app.listen(agent.getPort(), () => {null})
+    this.server = this.app.listen(agent.getPort(), () => {
+      null
+    })
   }
   public async stop(): Promise<void> {
     this.server?.close()
