@@ -287,7 +287,11 @@ export async function makeConnection(
   }
 }
 
-export async function makeTransport(agent: Agent, inboundTransporter: InboundTransporter,outboundTransporter: OutboundTransporter){
+export async function makeTransport(
+  agent: Agent,
+  inboundTransporter: InboundTransporter,
+  outboundTransporter: OutboundTransporter
+) {
   agent.setInboundTransporter(inboundTransporter)
   agent.setOutboundTransporter(outboundTransporter)
   await agent.init()
@@ -326,8 +330,7 @@ export class mockInBoundTransporter implements InboundTransporter {
         res.status(200).end()
       }
     })
-    this.server = this.app.listen(agent.getPort(), () => {
-    })
+    this.server = this.app.listen(agent.getPort(), () => {})
   }
   public async stop(): Promise<void> {
     this.server?.close()

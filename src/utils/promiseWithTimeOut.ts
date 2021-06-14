@@ -27,7 +27,9 @@ export async function waitForEventWithTimeout<T extends BaseEvent>(
     eventEmitter.on<T>(eventType, listener)
     timer = setTimeout(() => {
       eventEmitter.off<T>(eventType, listener)
-      reject(new Error('timeout waiting for "' + eventType + '" from initialized from message: ' + JSON.stringify(message)))
+      reject(
+        new Error('timeout waiting for "' + eventType + '" from initialized from message: ' + JSON.stringify(message))
+      )
     }, timeout)
     // emit after listener is listening to prevent any race condition
     eventEmitter.emit<T>(event)

@@ -25,7 +25,7 @@ import {
   makeTransport,
   sleep,
   waitForBasicMessage,
-  mockInBoundTransporter
+  mockInBoundTransporter,
 } from '../../src/__tests__/helpers'
 import logger from '../../src/__tests__/logger'
 import cors from 'cors'
@@ -34,7 +34,7 @@ import { MessageRepository } from '../../src/storage/MessageRepository'
 import { ReturnRouteTypes } from '../../src/decorators/transport/TransportDecorator'
 import { HttpOutboundTransporter } from '../mediation-server'
 import { Server } from 'http'
-import {timer} from 'rxjs'
+import { timer } from 'rxjs'
 
 const recipientConfig = getBaseConfig('recipient')
 const mediatorConfig = getBaseConfig('mediator', {
@@ -101,7 +101,6 @@ describe('mediator establishment', () => {
     )
     expect(mediationRecord.state).toBe(MediationState.Granted)
 
-    
     await (recipientAgent.inboundTransporter as mockMobileInboundTransporter).stop()
     await (mediatorAgent.inboundTransporter as mockInBoundTransporter).stop()
 
@@ -198,11 +197,10 @@ describe('mediator features', () => {
     await tedAgent.closeAndDeleteWallet()
   })
 
-  test('should set default mediator and retrieve',async () => {
+  test('should set default mediator and retrieve', async () => {
     await recipientAgent.mediationRecipient.setDefaultMediator(mediationRecord)
     const retrievedMediationRecord = await recipientAgent.mediationRecipient.getDefaultMediator()
     expect(mediationRecord).toBe(retrievedMediationRecord)
-
   })
 
   test('should get default mediator connection, and get default mediator from connection id', async () => {
@@ -221,7 +219,7 @@ describe('mediator features', () => {
     await recipientAgent.mediationRecipient.setDefaultMediator(mediationRecord)
     let { invitation, connectionRecord: agentAConnection } = await recipientAgent.connections.createConnection({
       autoAcceptConnection: true,
-      mediatorId: mediationRecord.id
+      mediatorId: mediationRecord.id,
     })
     console.log(`Just before Ted receives invitation ${JSON.stringify(invitation)}`)
     let agentBConnection = await tedAgent.connections.receiveInvitation(invitation, { autoAcceptConnection: true })
@@ -237,7 +235,7 @@ describe('mediator features', () => {
     expect(agentBConnection.isReady)
   })
 
-   /*test('Send a message from recipient to ted via mediator', async () => {
+  /*test('Send a message from recipient to ted via mediator', async () => {
     await recipientAgent.mediationRecipient.setDefaultMediator(mediationRecord)
     const { agentAConnection: recipientAgentConnection, agentBConnection: tedRecipientConnection } =
     await makeConnection(recipientAgent, tedAgent, {
@@ -253,7 +251,6 @@ describe('mediator features', () => {
      expect(basicMessage.content).toBe(message)
    })*/
 })
-
 
 class mockMobileOutBoundTransporter implements OutboundTransporter {
   private agent: Agent
@@ -317,7 +314,7 @@ class mockMobileInboundTransporter implements InboundTransporter {
   private async pollDownloadMessages(recipient: Agent, run = this.run, connection_?: ConnectionRecord) {
     if (this.run) {
       const connection = connection_ ?? (await recipient.mediationRecipient.getDefaultMediatorConnection())
-      if (connection?.state == "complete") {
+      if (connection?.state == 'complete') {
         await recipient.mediationRecipient.downloadMessages(connection)
         await sleep(50)
         await this.pollDownloadMessages(recipient, run, connection)
