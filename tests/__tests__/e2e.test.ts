@@ -217,7 +217,7 @@ describe('mediator features', () => {
   })
   test('recipient and Ted make a connection via mediator', async () => {
     await recipientAgent.mediationRecipient.setDefaultMediator(mediationRecord)
-    const { invitation, connectionRecord: agentAConnection } = await recipientAgent.connections.createConnection({
+    let { invitation, connectionRecord: agentAConnection } = await recipientAgent.connections.createConnection({
       autoAcceptConnection: true,
       mediatorId: mediationRecord.id,
     })
