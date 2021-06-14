@@ -1,3 +1,7 @@
 export * from './messages'
 export * from './services'
 export * from './repository'
+export * from './RoutingEvents'
+export * from './models'
+export * from './MediatorModule'
+export * from './RecipientModule'

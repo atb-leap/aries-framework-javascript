@@ -1,7 +1,10 @@
+import express, { Express } from 'express'
+import cors from 'cors'
+import { Server } from 'http'
 import type { Schema, CredDef, Did } from 'indy-sdk'
 import indy from 'indy-sdk'
 import path from 'path'
-import { Subject } from 'rxjs'
+import { async, Subject } from 'rxjs'
 import { Agent, InboundTransporter, OutboundTransporter } from '..'
 import { InitConfig, OutboundPackage, WireMessage } from '../types'
 import {
@@ -25,6 +28,7 @@ import {
 import { BasicMessage, BasicMessageEventTypes, BasicMessageReceivedEvent } from '../modules/basic-messages'
 import testLogger from './logger'
 import { NodeFileSystem } from '../storage/fs/NodeFileSystem'
+import { RoutingEventTypes, MediationStateChangedEvent, MediationState, MediationRecord } from '../modules/routing'
 
 export const genesisPath = process.env.GENESIS_TXN_PATH
   ? path.resolve(process.env.GENESIS_TXN_PATH)
@@ -37,7 +41,8 @@ export const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms))
 export function getBaseConfig(name: string, extraConfig: Partial<InitConfig> = {}) {
   const config: InitConfig = {
     label: `Agent: ${name}`,
-    mediatorUrl: 'http://localhost:3001',
+    // host: 'http://localhost',
+    // port: '3001',
     walletConfig: { id: `Wallet: ${name}` },
     walletCredentials: { key: `Key: ${name}` },
     publicDidSeed,
@@ -107,6 +112,35 @@ export async function waitForCredentialRecord(
     }
 
     agent.events.on<CredentialStateChangedEvent>(CredentialEventTypes.CredentialStateChanged, listener)
+  })
+}
+
+export async function waitForMediationRecord(
+  agent: Agent,
+  {
+    id,
+    state,
+    previousState,
+  }: {
+    id?: string
+    state?: MediationState
+    previousState?: MediationState | null
+  }
+): Promise<MediationRecord> {
+  return new Promise((resolve) => {
+    const listener = (event: MediationStateChangedEvent) => {
+      const previousStateMatches = previousState === undefined || event.payload.previousState === previousState
+      const mediationIdMatches = id === undefined || event.payload.mediationRecord.id === id
+      const stateMatches = state === undefined || event.payload.mediationRecord.state === state
+
+      if (previousStateMatches && mediationIdMatches && stateMatches) {
+        agent.events.off<MediationStateChangedEvent>(RoutingEventTypes.MediationStateChanged, listener)
+
+        resolve(event.payload.mediationRecord)
+      }
+    }
+
+    agent.events.on<MediationStateChangedEvent>(RoutingEventTypes.MediationStateChanged, listener)
   })
 }
 
@@ -231,9 +265,17 @@ export function getMockConnection({
   })
 }
 
-export async function makeConnection(agentA: Agent, agentB: Agent) {
+export async function makeConnection(
+  agentA: Agent,
+  agentB: Agent,
+  config?: {
+    autoAcceptConnection?: boolean
+    alias?: string
+    mediatorId?: string
+  }
+) {
   // eslint-disable-next-line prefer-const
-  let { invitation, connectionRecord: agentAConnection } = await agentA.connections.createConnection()
+  let { invitation, connectionRecord: agentAConnection } = await agentA.connections.createConnection(config)
   let agentBConnection = await agentB.connections.receiveInvitation(invitation)
 
   agentAConnection = await agentA.connections.returnWhenIsConnected(agentAConnection.id)
@@ -242,6 +284,66 @@ export async function makeConnection(agentA: Agent, agentB: Agent) {
   return {
     agentAConnection,
     agentBConnection,
+  }
+}
+
+export async function makeTransport(agent: Agent, inboundTransporter: InboundTransporter,outboundTransporter: OutboundTransporter){
+  agent.setInboundTransporter(inboundTransporter)
+  agent.setOutboundTransporter(outboundTransporter)
+  await agent.init()
+}
+
+export function makeInBoundTransporter() {
+  const app = express()
+  app.use(cors())
+  app.use(express.json())
+  app.use(
+    express.text({
+      type: ['application/ssi-agent-wire', 'text/plain'],
+    })
+  )
+  app.set('json spaces', 2)
+  return new mockInBoundTransporter(app)
+}
+
+export class mockInBoundTransporter implements InboundTransporter {
+  private app: Express
+  public server?: Server
+  public constructor(app: Express) {
+    this.app = app
+  }
+  public async start(agent: Agent) {
+    this.app.post('/msg', async (req, res) => {
+      const packedMessage = JSON.parse(req.body)
+      try {
+        const outboundMessage = await agent.receiveMessage(packedMessage)
+        if (outboundMessage) {
+          res.status(200).json(outboundMessage.payload).end()
+        } else {
+          res.status(200).end()
+        }
+      } catch (e) {
+        res.status(200).end()
+      }
+    })
+    this.server = this.app.listen(agent.getPort(), () => {
+    })
+  }
+  public async stop(): Promise<void> {
+    this.server?.close()
+  }
+}
+
+export class mockOutBoundTransporter implements OutboundTransporter {
+  public async start(): Promise<void> {
+    // No custom start logic required
+  }
+  public async stop(): Promise<void> {
+    // No custom stop logic required
+  }
+  public supportedSchemes = ['http', 'dicomm', 'https']
+  public async sendMessage(outboundPackage: OutboundPackage) {
+    const { connection, payload, endpoint, responseRequested } = outboundPackage
   }
 }
 

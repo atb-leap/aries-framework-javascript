@@ -10,7 +10,7 @@ import testLogger from '../src/__tests__/logger'
 
 const logger = testLogger
 
-class WsInboundTransporter implements InboundTransporter {
+export class WsInboundTransporter implements InboundTransporter {
   private socketServer: WebSocket.Server
 
   // We're using a `socketId` just for the prevention of calling the connection handler twice.
@@ -96,11 +96,11 @@ app.get('/api/connections', async (req, res) => {
   res.json(connections)
 })
 
-app.get('/api/routes', async (req, res) => {
-  // TODO This endpoint is for testing purpose only. Return mediator connection by their verkey.
-  const routes = agent.routing.getRoutingTable()
-  res.send(routes)
-})
+// app.get('/api/routes', async (req, res) => {
+//   // TODO This endpoint is for testing purpose only. Return mediator connection by their verkey.
+//   const routes = agent.mediator.getRoutingTable()
+//   res.send(routes)
+// })
 
 app.get('/api/messages', async (req, res) => {
   // TODO This endpoint is for testing purpose only.

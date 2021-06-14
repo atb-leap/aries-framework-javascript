@@ -1,127 +1,380 @@
-import { Agent, HttpOutboundTransporter, InboundTransporter } from '../../src'
+import express, { Express } from 'express'
+import WebSocket from 'ws'
+import fetch from 'node-fetch'
+import {
+  Agent,
+  assertConnection,
+  Connection,
+  ConnectionRecord,
+  ConnectionState,
+  InboundTransporter,
+  MediationRecord,
+  MediationState,
+  OutboundPackage,
+  OutboundTransporter,
+  WsOutboundTransporter,
+  WebSocketTransportSession,
+} from '../../src'
+import testLogger, { TestLogger } from '../../src/__tests__/logger'
 import { get } from '../http'
-import { getBaseConfig, sleep, waitForBasicMessage } from '../../src/__tests__/helpers'
+import {
+  getBaseConfig,
+  makeConnection,
+  makeInBoundTransporter,
+  mockOutBoundTransporter,
+  makeTransport,
+  sleep,
+  waitForBasicMessage,
+  mockInBoundTransporter
+} from '../../src/__tests__/helpers'
 import logger from '../../src/__tests__/logger'
+import cors from 'cors'
+import { InMemoryMessageRepository } from '../../src/storage/InMemoryMessageRepository'
+import { MessageRepository } from '../../src/storage/MessageRepository'
+import { ReturnRouteTypes } from '../../src/decorators/transport/TransportDecorator'
+import { HttpOutboundTransporter } from '../mediation-server'
+import { Server } from 'http'
+import {timer} from 'rxjs'
 
-const aliceConfig = getBaseConfig('E2E Alice', { mediatorUrl: 'http://localhost:3001' })
-const bobConfig = getBaseConfig('E2E Bob', { mediatorUrl: 'http://localhost:3002' })
-
-describe('with mediator', () => {
-  let aliceAgent: Agent
-  let bobAgent: Agent
-  let aliceAtAliceBobId: string
-
-  afterAll(async () => {
-    ;(aliceAgent.inboundTransporter as PollingInboundTransporter).stop = true
-    ;(bobAgent.inboundTransporter as PollingInboundTransporter).stop = true
-
-    // Wait for messages to flush out
-    await new Promise((r) => setTimeout(r, 1000))
-
-    await aliceAgent.closeAndDeleteWallet()
-    await bobAgent.closeAndDeleteWallet()
-  })
-
-  test('Alice and Bob make a connection with mediator', async () => {
-    aliceAgent = new Agent(aliceConfig)
-    aliceAgent.setInboundTransporter(new PollingInboundTransporter())
-    aliceAgent.setOutboundTransporter(new HttpOutboundTransporter(aliceAgent))
-    await aliceAgent.init()
-
-    bobAgent = new Agent(bobConfig)
-    bobAgent.setInboundTransporter(new PollingInboundTransporter())
-    bobAgent.setOutboundTransporter(new HttpOutboundTransporter(bobAgent))
-    await bobAgent.init()
-
-    const aliceInbound = aliceAgent.routing.getInboundConnection()
-    const aliceInboundConnection = aliceInbound?.connection
-    const aliceKeyAtAliceMediator = aliceInboundConnection?.verkey
-    logger.test('aliceInboundConnection', aliceInboundConnection)
-
-    const bobInbound = bobAgent.routing.getInboundConnection()
-    const bobInboundConnection = bobInbound?.connection
-    const bobKeyAtBobMediator = bobInboundConnection?.verkey
-    logger.test('bobInboundConnection', bobInboundConnection)
-
-    // TODO This endpoint currently exists at mediator only for the testing purpose. It returns mediator's part of the pairwise connection.
-    const mediatorConnectionAtAliceMediator = JSON.parse(
-      await get(`${aliceAgent.getMediatorUrl()}/api/connections/${aliceKeyAtAliceMediator}`)
-    )
-    const mediatorConnectionAtBobMediator = JSON.parse(
-      await get(`${bobAgent.getMediatorUrl()}/api/connections/${bobKeyAtBobMediator}`)
-    )
-
-    logger.test('mediatorConnectionAtAliceMediator', mediatorConnectionAtAliceMediator)
-    logger.test('mediatorConnectionAtBobMediator', mediatorConnectionAtBobMediator)
-
-    expect(aliceInboundConnection).toBeConnectedWith(mediatorConnectionAtAliceMediator)
-    expect(bobInboundConnection).toBeConnectedWith(mediatorConnectionAtBobMediator)
-  })
-
-  test('Alice and Bob make a connection via mediator', async () => {
-    // eslint-disable-next-line prefer-const
-    let { invitation, connectionRecord: aliceAgentConnection } = await aliceAgent.connections.createConnection()
-
-    let bobAgentConnection = await bobAgent.connections.receiveInvitation(invitation)
-
-    aliceAgentConnection = await aliceAgent.connections.returnWhenIsConnected(aliceAgentConnection.id)
-
-    bobAgentConnection = await bobAgent.connections.returnWhenIsConnected(bobAgentConnection.id)
-
-    expect(aliceAgentConnection).toBeConnectedWith(bobAgentConnection)
-    expect(bobAgentConnection).toBeConnectedWith(aliceAgentConnection)
-
-    // We save this verkey to send message via this connection in the following test
-    aliceAtAliceBobId = aliceAgentConnection.id
-  })
-
-  test('Send a message from Alice to Bob via mediator', async () => {
-    // send message from Alice to Bob
-    const aliceConnectionAtAliceBob = await aliceAgent.connections.getById(aliceAtAliceBobId)
-
-    logger.test('aliceConnectionAtAliceBob\n', aliceConnectionAtAliceBob)
-
-    const message = 'hello, world'
-    await aliceAgent.basicMessages.sendMessage(aliceConnectionAtAliceBob, message)
-
-    const basicMessage = await waitForBasicMessage(bobAgent, {
-      content: message,
-    })
-
-    expect(basicMessage.content).toBe(message)
-  })
+const recipientConfig = getBaseConfig('recipient')
+const mediatorConfig = getBaseConfig('mediator', {
+  host: 'http://localhost',
+  port: 3002,
+})
+const tedConfig = getBaseConfig('ted', {
+  host: 'http://localhost',
+  port: 3003,
 })
 
-class PollingInboundTransporter implements InboundTransporter {
-  public stop: boolean
+describe('mediator establishment', () => {
+  let recipientAgent: Agent
+  let mediatorAgent: Agent
+
+  beforeEach(async () => {
+    //console.log('Before Each - Started')
+    const messageRepository = new InMemoryMessageRepository()
+    recipientAgent = new Agent(recipientConfig)
+    mediatorAgent = new Agent(mediatorConfig, messageRepository)
+  })
+
+  afterEach(async () => {
+    //console.log('After Each - Started')
+
+    try {
+      //console.log('Wallet Cleanup - Started')
+      await recipientAgent.closeAndDeleteWallet()
+      await mediatorAgent.closeAndDeleteWallet()
+    } catch (error) {
+      //console.warn('After Each - Error closing wallets', error)
+    } finally {
+      //console.log('Wallet Cleanup - Completed')
+    }
+
+    //console.log('After Each - Completed')
+  })
+
+  test('recipient and mediator establish a connection and granted mediation', async () => {
+    //console.log('recipient and mediator establish a connection and granted mediation start')
+    try {
+      await makeTransport(
+        recipientAgent,
+        new mockMobileInboundTransporter(),
+        new mockMobileOutBoundTransporter(recipientAgent)
+      )
+      await makeTransport(mediatorAgent, makeInBoundTransporter(), new mockOutBoundTransporter())
+    } catch (error) {
+      console.warn(error)
+    }
+    //console.log('Agents tranporter configured and started')
+
+    const { agentAConnection: mediatorAgentConnection, agentBConnection: recipientAgentConnection } =
+      await makeConnection(mediatorAgent, recipientAgent, {
+        autoAcceptConnection: true,
+      })
+    expect(recipientAgentConnection).toBeConnectedWith(mediatorAgentConnection)
+    expect(mediatorAgentConnection).toBeConnectedWith(recipientAgentConnection)
+    expect(mediatorAgentConnection.isReady)
+    //console.log('Connections established')
+
+    let mediationRecord: MediationRecord = await recipientAgent.mediationRecipient.requestAndWaitForAcception(
+      recipientAgentConnection
+    )
+    expect(mediationRecord.state).toBe(MediationState.Granted)
+
+    
+    await (recipientAgent.inboundTransporter as mockMobileInboundTransporter).stop()
+    await (mediatorAgent.inboundTransporter as mockInBoundTransporter).stop()
+
+    //console.log('Transport Cleanup - Completed')
+
+    //console.log('recipient and mediator establish a connection and granted mediation end')
+  })
+
+  test('recipient and mediator establish a connection and granted mediation with WebSockets', async () => {
+    //console.log('recipient and mediator establish a connection and granted mediation with WebSockets start')
+    // websockets
+    try {
+      const socketServer = new WebSocket.Server({ noServer: true })
+      await makeTransport(
+        recipientAgent,
+        new WsInboundTransporter(socketServer),
+        new WsOutboundTransporter(recipientAgent)
+      )
+      const socketServer_ = new WebSocket.Server({ noServer: false, port: 3002 })
+      await makeTransport(
+        mediatorAgent,
+        new WsInboundTransporter(socketServer_),
+        new WsOutboundTransporter(mediatorAgent)
+      )
+    } catch (error) {
+      console.warn(error)
+    }
+    //console.log('Agents configured')
+
+    const { agentAConnection: mediatorAgentConnection, agentBConnection: recipientAgentConnection } =
+      await makeConnection(mediatorAgent, recipientAgent, {
+        autoAcceptConnection: true,
+      })
+    //console.log('Agents connected')
+    expect(recipientAgentConnection).toBeConnectedWith(mediatorAgentConnection)
+    expect(mediatorAgentConnection).toBeConnectedWith(recipientAgentConnection)
+    expect(mediatorAgentConnection.isReady)
+
+    //console.log('Connected, requesting and waiting for accept')
+    let mediationRecord: MediationRecord = await recipientAgent.mediationRecipient.requestAndWaitForAcception(
+      recipientAgentConnection
+    )
+    expect(mediationRecord.state).toBe(MediationState.Granted)
+    //console.log('Transport Cleanup - Started')
+    await (recipientAgent.outboundTransporter as WsOutboundTransporter).stop()
+    //console.log('Closed Recipient Outbound Socket')
+    await (recipientAgent.inboundTransporter as WsInboundTransporter).stop()
+    await (mediatorAgent.outboundTransporter as WsOutboundTransporter).stop()
+    //console.log('Closed Mediator Outbound Socket')
+    await (mediatorAgent.inboundTransporter as WsInboundTransporter).stop()
+    //console.log('Transport Cleanup - Completed')
+    //console.log('recipient and mediator establish a connection and granted mediation with WebSockets end')
+  })
+})
+describe('mediator features', () => {
+  let recipientAgent: Agent
+  let mediatorAgent: Agent
+  let mediationRecord: MediationRecord
+  let tedAgent: Agent
+
+  beforeEach(async () => {
+    //console.log('Before Each features test: Started')
+    recipientAgent = new Agent(recipientConfig)
+    mediatorAgent = new Agent(mediatorConfig, new InMemoryMessageRepository())
+    tedAgent = new Agent(tedConfig, new InMemoryMessageRepository())
+    //console.log('Before Each features test: Agents created')
+
+    try {
+      await makeTransport(
+        recipientAgent,
+        new mockMobileInboundTransporter(),
+        new mockMobileOutBoundTransporter(recipientAgent)
+      )
+      await makeTransport(mediatorAgent, makeInBoundTransporter(), new mockOutBoundTransporter())
+      await makeTransport(tedAgent, makeInBoundTransporter(), new mockOutBoundTransporter())
+    } catch (error) {
+      console.warn(error)
+    }
+    //console.log('Before Each features test: Agents Transporters configured and initialized')
+    const { agentAConnection: mediatorAgentConnection, agentBConnection: recipientAgentConnection } =
+      await makeConnection(mediatorAgent, recipientAgent, {
+        autoAcceptConnection: true,
+      })
+    //console.log('Before Each features test: Agents connected')
+    mediationRecord = await recipientAgent.mediationRecipient.requestAndWaitForAcception(recipientAgentConnection)
+    //console.log('Before Each features test: Complete')
+  })
+  afterEach(async () => {
+    await (recipientAgent.inboundTransporter as mockMobileInboundTransporter).stop()
+    await (mediatorAgent.inboundTransporter as mockInBoundTransporter).stop()
+    await (tedAgent.inboundTransporter as mockInBoundTransporter).stop()
+    await recipientAgent.closeAndDeleteWallet()
+    await mediatorAgent.closeAndDeleteWallet()
+    await tedAgent.closeAndDeleteWallet()
+  })
+
+  test('should set default mediator and retrieve',async () => {
+    await recipientAgent.mediationRecipient.setDefaultMediator(mediationRecord)
+    const retrievedMediationRecord = await recipientAgent.mediationRecipient.getDefaultMediator()
+    expect(mediationRecord).toBe(retrievedMediationRecord)
+
+  })
+
+  test('should get default mediator connection, and get default mediator from connection id', async () => {
+    await recipientAgent.mediationRecipient.setDefaultMediator(mediationRecord)
+    const recipientMediatorConnection = await recipientAgent.mediationRecipient.getDefaultMediatorConnection()
+    if (recipientMediatorConnection) {
+      expect(recipientMediatorConnection?.isReady)
+      const recipientMediatorRecord = await recipientAgent.mediationRecipient.findByConnectionId(
+        recipientMediatorConnection.id
+      )
+    } else {
+      throw new Error('no mediator connection found.')
+    }
+  })
+  test('recipient and Ted make a connection via mediator', async () => {
+    await recipientAgent.mediationRecipient.setDefaultMediator(mediationRecord)
+    let { invitation, connectionRecord: agentAConnection } = await recipientAgent.connections.createConnection({
+      autoAcceptConnection: true,
+      mediatorId: mediationRecord.id
+    })
+    console.log(`Just before Ted receives invitation ${JSON.stringify(invitation)}`)
+    let agentBConnection = await tedAgent.connections.receiveInvitation(invitation, { autoAcceptConnection: true })
+    console.log(JSON.stringify(agentBConnection))
+    console.log(`recipientAgent returnWhenIsConnected about to be called ${JSON.stringify(agentAConnection)}`)
+    agentAConnection = await recipientAgent.connections.returnWhenIsConnected(agentAConnection.id)
+    console.log(`recipientAgent returnWhenIsConnected after called ${JSON.stringify(agentAConnection)}`)
+    console.log(`tedAgent returnWhenIsConnected about to be called ${JSON.stringify(agentBConnection)}`)
+    agentBConnection = await tedAgent.connections.returnWhenIsConnected(agentBConnection.id)
+    console.log(`tedAgent returnWhenIsConnected after called ${JSON.stringify(agentBConnection)}`)
+    expect(agentAConnection).toBeConnectedWith(agentBConnection)
+    expect(agentBConnection).toBeConnectedWith(agentAConnection)
+    expect(agentBConnection.isReady)
+  })
+
+   /*test('Send a message from recipient to ted via mediator', async () => {
+    await recipientAgent.mediationRecipient.setDefaultMediator(mediationRecord)
+    const { agentAConnection: recipientAgentConnection, agentBConnection: tedRecipientConnection } =
+    await makeConnection(recipientAgent, tedAgent, {
+      autoAcceptConnection: true,
+    })
+     // send message from recipient to ted
+    const message = 'hello, world'
+     await recipientAgent.basicMessages.sendMessage(tedRecipientConnection, message)
+     const basicMessage = await waitForBasicMessage(recipientAgent, {
+       content: message,
+    })
+
+     expect(basicMessage.content).toBe(message)
+   })*/
+})
+
+
+class mockMobileOutBoundTransporter implements OutboundTransporter {
+  private agent: Agent
+
+  public constructor(agent: Agent) {
+    this.agent = agent
+  }
+  public async start(): Promise<void> {
+    // No custom start logic required
+  }
+
+  public async stop(): Promise<void> {
+    // No custom stop logic required
+  }
+
+  public supportedSchemes = ['http', 'dicomm', 'https']
+
+  public async sendMessage(outboundPackage: OutboundPackage) {
+    const { connection, payload, endpoint, responseRequested } = outboundPackage
+    if (!endpoint || endpoint == 'didcomm:transport/queue') {
+      throw new Error(`Missing endpoint. I don't know how and where to send the message.`)
+    }
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/ssi-agent-wire',
+        },
+        body: JSON.stringify(payload),
+      })
+      const data = await response.text()
+      if (data) {
+        testLogger.debug(`Response received:\n ${response}`)
+        const wireMessage = JSON.parse(data)
+        this.agent.receiveMessage(wireMessage)
+      } else {
+        testLogger.debug(`No response received.`)
+      }
+    } catch (e) {
+      testLogger.debug('error sending message', e)
+      throw e
+    }
+  }
+}
+
+class mockMobileInboundTransporter implements InboundTransporter {
+  public run: boolean
 
   public constructor() {
-    this.stop = false
+    this.run = false
   }
   public async start(agent: Agent) {
-    await this.registerMediator(agent)
+    this.run = true
+    await this.pollDownloadMessages(agent)
   }
 
-  public async registerMediator(agent: Agent) {
-    const mediatorUrl = agent.getMediatorUrl() || ''
-    const mediatorInvitationUrl = await get(`${mediatorUrl}/invitation`)
-    const { verkey: mediatorVerkey } = JSON.parse(await get(`${mediatorUrl}/`))
-    await agent.routing.provision({
-      verkey: mediatorVerkey,
-      invitationUrl: mediatorInvitationUrl,
-    })
-    this.pollDownloadMessages(agent)
+  public async stop(): Promise<void> {
+    this.run = false
   }
 
-  private pollDownloadMessages(agent: Agent) {
-    const loop = async () => {
-      while (!this.stop) {
-        await agent.routing.downloadMessages()
-        await sleep(1000)
+  private async pollDownloadMessages(recipient: Agent, run = this.run, connection_?: ConnectionRecord) {
+    if (this.run) {
+      const connection = connection_ ?? (await recipient.mediationRecipient.getDefaultMediatorConnection())
+      if (connection?.state == "complete") {
+        await recipient.mediationRecipient.downloadMessages(connection)
+        await sleep(50)
+        await this.pollDownloadMessages(recipient, run, connection)
       }
     }
-    new Promise(() => {
-      loop()
+  }
+}
+
+export class WsInboundTransporter implements InboundTransporter {
+  private socketServer: WebSocket.Server
+
+  // We're using a `socketId` just for the prevention of calling the connection handler twice.
+  private socketIds: Record<string, unknown> = {}
+
+  public constructor(socketServer: WebSocket.Server) {
+    this.socketServer = socketServer
+  }
+
+  public async start(agent: Agent) {
+    this.socketServer.on('connection', (socket: any, _: Express.Request, socketId: string) => {
+      if (!this.socketIds[socketId]) {
+        logger.debug(`Saving new socket with id ${socketId}.`)
+        this.socketIds[socketId] = socket
+        this.listenOnWebSocketMessages(agent, socket)
+        socket.on('close', () => logger.debug('Socket closed.'))
+      } else {
+        logger.debug(`Socket with id ${socketId} already exists.`)
+      }
+    })
+  }
+
+  public async stop() {
+    logger.debug('Closing Socket Server')
+    const promise: Promise<void> = new Promise((resolve, reject) => {
+      this.socketServer.close((error) => {
+        if (error) {
+          logger.error('Error closing socket server')
+          reject(error)
+        } else {
+          //console.log('Socket Server closed')
+          resolve()
+        }
+      })
+    })
+
+    return promise
+  }
+
+  private listenOnWebSocketMessages(agent: Agent, socket: WebSocket) {
+    socket.addEventListener('message', async (event: any) => {
+      logger.debug('WebSocket message event received.', { url: event.target.url, data: event.data })
+      // @ts-expect-error Property 'dispatchEvent' is missing in type WebSocket imported from 'ws' module but required in type 'WebSocket'.
+      const session = new WebSocketTransportSession(socket)
+      const outboundMessage = await agent.receiveMessage(JSON.parse(event.data), session)
+      if (outboundMessage) {
+        socket.send(JSON.stringify(outboundMessage.payload))
+      }
     })
   }
 }

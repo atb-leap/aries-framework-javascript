@@ -19,9 +19,17 @@ import { JsonTransformer } from '../../../utils/JsonTransformer'
 import { EventEmitter } from '../../../agent/EventEmitter'
 import { getBaseConfig, getMockConnection, mockFunction } from '../../../__tests__/helpers'
 import { ConnectionRepository } from '../repository/ConnectionRepository'
+import { MediationRepository } from '../../routing/repository/MediationRepository'
+import { RecipientService } from '../../routing/services/RecipientService'
+import { MediationRecord, MediationRole, MediationState } from '../../routing'
+import { waitForEventWithTimeout } from '../../../utils/promiseWithTimeOut'
 
 jest.mock('../repository/ConnectionRepository')
+jest.mock('../../routing/repository/MediationRepository')
+jest.mock('../../../utils/promiseWithTimeOut')
+
 const ConnectionRepositoryMock = ConnectionRepository as jest.Mock<ConnectionRepository>
+const MediationRepositoryMock = MediationRepository as jest.Mock<MediationRepository>
 
 describe('ConnectionService', () => {
   const initConfig = getBaseConfig('ConnectionServiceTest', {
@@ -29,11 +37,28 @@ describe('ConnectionService', () => {
     port: 8080,
   })
 
+  const mediatorRecord = new MediationRecord({
+    state: MediationState.Granted,
+    role: MediationRole.Recipient,
+    connectionId: 'fakeConnectionId',
+    recipientKeys: ['fakeRecipientKey'],
+    routingKeys: ['fakeRoutingKey'],
+    endpoint: 'fakeEndpoint',
+    tags: {
+      state: MediationState.Init,
+      role: MediationRole.Recipient,
+      connectionId: 'fakeConnectionId',
+      default: 'false',
+    },
+  })
+
   let wallet: Wallet
   let agentConfig: AgentConfig
   let connectionRepository: ConnectionRepository
+  let mediationRepository: MediationRepository
   let connectionService: ConnectionService
   let eventEmitter: EventEmitter
+  let recipientService: RecipientService
 
   beforeAll(async () => {
     agentConfig = new AgentConfig(initConfig)
@@ -49,7 +74,9 @@ describe('ConnectionService', () => {
   beforeEach(() => {
     eventEmitter = new EventEmitter()
     connectionRepository = new ConnectionRepositoryMock()
-    connectionService = new ConnectionService(wallet, agentConfig, connectionRepository, eventEmitter)
+    mediationRepository = new MediationRepositoryMock()
+    recipientService = new RecipientService(mediationRepository, wallet, eventEmitter)
+    connectionService = new ConnectionService(wallet, agentConfig, connectionRepository, eventEmitter, recipientService)
   })
 
   describe('createConnectionWithInvitation', () => {
@@ -121,6 +148,24 @@ describe('ConnectionService', () => {
       expect(aliasDefined.alias).toBe('test-alias')
       expect(aliasUndefined.alias).toBeUndefined()
     })
+
+    it('returns a connection record with mediator information', async () => {
+      expect.assertions(1)
+
+      mockFunction(mediationRepository.findById).mockReturnValue(Promise.resolve(mediatorRecord))
+      mockFunction(waitForEventWithTimeout).mockReturnValue(Promise.resolve({}))
+      const { message: invitation } = await connectionService.createInvitation({
+        mediatorId: mediatorRecord.id,
+      })
+      expect(invitation).toEqual(
+        expect.objectContaining({
+          label: initConfig.label,
+          recipientKeys: [expect.any(String)],
+          routingKeys: ['fakeRoutingKey'],
+          serviceEndpoint: 'fakeEndpoint',
+        })
+      )
+    })
   })
 
   describe('processInvitation', () => {
@@ -185,6 +230,25 @@ describe('ConnectionService', () => {
 
       expect(aliasDefined.alias).toBe('test-alias')
       expect(aliasUndefined.alias).toBeUndefined()
+    })
+
+    it('returns a connection record with the mediator with mediator information', async () => {
+      expect.assertions(1)
+      const invitation = new ConnectionInvitationMessage({
+        did: 'did:sov:test',
+        label: 'test label',
+      })
+
+      mockFunction(mediationRepository.findById).mockReturnValue(Promise.resolve(mediatorRecord))
+      mockFunction(waitForEventWithTimeout).mockReturnValue(Promise.resolve({}))
+      const record = await connectionService.processInvitation(invitation, { mediatorId: mediatorRecord.id })
+      expect(record.didDoc.service[0]).toEqual(
+        expect.objectContaining({
+          recipientKeys: [expect.any(String)],
+          routingKeys: ['fakeRoutingKey'],
+          serviceEndpoint: 'fakeEndpoint',
+        })
+      )
     })
   })
 
