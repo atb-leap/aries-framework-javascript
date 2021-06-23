@@ -78,7 +78,7 @@ describe('ConnectionService', () => {
       expect(connectionRecord.autoAcceptConnection).toBeUndefined()
       expect(connectionRecord.id).toEqual(expect.any(String))
       expect(connectionRecord.verkey).toEqual(expect.any(String))
-      expect(connectionRecord.tags).toEqual(
+      expect(connectionRecord.getTags()).toEqual(
         expect.objectContaining({
           verkey: connectionRecord.verkey,
         })
@@ -156,7 +156,7 @@ describe('ConnectionService', () => {
       expect(connection.autoAcceptConnection).toBeUndefined()
       expect(connection.id).toEqual(expect.any(String))
       expect(connection.verkey).toEqual(expect.any(String))
-      expect(connection.tags).toEqual(
+      expect(connection.getTags()).toEqual(
         expect.objectContaining({
           verkey: connection.verkey,
           invitationKey: recipientKey,
@@ -288,10 +288,9 @@ describe('ConnectionService', () => {
 
       expect(processedConnection.state).toBe(ConnectionState.Requested)
       expect(processedConnection.theirDid).toBe(theirDid)
-      // TODO: we should transform theirDidDoc to didDoc instance after retrieving from persistence
       expect(processedConnection.theirDidDoc).toEqual(theirDidDoc)
-      expect(processedConnection.tags.theirKey).toBe(theirVerkey)
-      expect(processedConnection.tags.threadId).toBe(connectionRequest.id)
+      expect(processedConnection.theirKey).toBe(theirVerkey)
+      expect(processedConnection.threadId).toBe(connectionRequest.id)
     })
 
     it('throws an error when the message context does not have a connection', async () => {
@@ -447,10 +446,12 @@ describe('ConnectionService', () => {
         verkey,
         state: ConnectionState.Requested,
         role: ConnectionRole.Invitee,
-        tags: {
+        invitation: new ConnectionInvitationMessage({
+          label: 'test',
           // processResponse checks wether invitation key is same as signing key for connetion~sig
-          invitationKey: theirVerkey,
-        },
+          recipientKeys: [theirVerkey],
+          serviceEndpoint: 'test',
+        }),
       })
 
       const otherPartyConnection = new Connection({
@@ -587,10 +588,12 @@ describe('ConnectionService', () => {
         did,
         verkey,
         state: ConnectionState.Requested,
-        tags: {
+        invitation: new ConnectionInvitationMessage({
+          label: 'test',
           // processResponse checks wether invitation key is same as signing key for connetion~sig
-          invitationKey: theirVerkey,
-        },
+          recipientKeys: [theirVerkey],
+          serviceEndpoint: 'test',
+        }),
         theirDid: undefined,
         theirDidDoc: undefined,
       })
