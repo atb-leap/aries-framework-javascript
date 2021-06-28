@@ -1,4 +1,4 @@
-import type { TagsBase } from '../../../storage/BaseRecord'
+import type { Tags } from '../../../storage/BaseRecord'
 import type { ConnectionRole } from '../models/ConnectionRole'
 import type { Did, Verkey } from 'indy-sdk'
 
@@ -11,7 +11,7 @@ import { ConnectionInvitationMessage } from '../messages/ConnectionInvitationMes
 import { ConnectionState } from '../models/ConnectionState'
 import { DidDoc } from '../models/did/DidDoc'
 
-export interface ConnectionRecordProps {
+interface ConnectionProps {
   id?: string
   createdAt?: Date
   did: Did
@@ -24,24 +24,20 @@ export interface ConnectionRecordProps {
   role: ConnectionRole
   alias?: string
   autoAcceptConnection?: boolean
-  threadId?: string
-  tags?: CustomConnectionTags
 }
 
-export type CustomConnectionTags = TagsBase
-export type DefaultConnectionTags = {
-  state: ConnectionState
-  role: ConnectionRole
+export interface ConnectionTags extends Tags {
   invitationKey?: string
   threadId?: string
   verkey?: string
   theirKey?: string
 }
 
-export class ConnectionRecord
-  extends BaseRecord<DefaultConnectionTags, CustomConnectionTags>
-  implements ConnectionRecordProps
-{
+export interface ConnectionStorageProps extends ConnectionProps {
+  tags: ConnectionTags
+}
+
+export class ConnectionRecord extends BaseRecord implements ConnectionStorageProps {
   public state!: ConnectionState
   public role!: ConnectionRole
 
@@ -58,13 +54,12 @@ export class ConnectionRecord
   public invitation?: ConnectionInvitationMessage
   public alias?: string
   public autoAcceptConnection?: boolean
-
-  public threadId?: string
+  public tags!: ConnectionTags
 
   public static readonly type = 'ConnectionRecord'
   public readonly type = ConnectionRecord.type
 
-  public constructor(props: ConnectionRecordProps) {
+  public constructor(props: ConnectionStorageProps) {
     super()
 
     if (props) {
@@ -79,23 +74,8 @@ export class ConnectionRecord
       this.role = props.role
       this.alias = props.alias
       this.autoAcceptConnection = props.autoAcceptConnection
-      this._tags = props.tags ?? {}
+      this.tags = props.tags
       this.invitation = props.invitation
-      this.threadId = props.threadId
-    }
-  }
-
-  public getTags() {
-    const invitationKey = (this.invitation?.recipientKeys && this.invitation.recipientKeys[0]) || undefined
-
-    return {
-      ...this._tags,
-      state: this.state,
-      role: this.role,
-      invitationKey,
-      threadId: this.threadId,
-      verkey: this.verkey,
-      theirKey: this.theirKey || undefined,
     }
   }
 

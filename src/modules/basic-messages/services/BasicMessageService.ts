@@ -9,9 +9,9 @@ import { Lifecycle, scoped } from 'tsyringe'
 import { EventEmitter } from '../../../agent/EventEmitter'
 import { createOutboundMessage } from '../../../agent/helpers'
 import { BasicMessageEventTypes } from '../BasicMessageEvents'
-import { BasicMessageRole } from '../BasicMessageRole'
 import { BasicMessage } from '../messages'
-import { BasicMessageRecord, BasicMessageRepository } from '../repository'
+import { BasicMessageRepository } from '../repository'
+import { BasicMessageRecord } from '../repository/BasicMessageRecord'
 
 @scoped(Lifecycle.ContainerScoped)
 export class BasicMessageService {
@@ -32,8 +32,7 @@ export class BasicMessageService {
       id: basicMessage.id,
       sentTime: basicMessage.sentTime.toISOString(),
       content: basicMessage.content,
-      connectionId: connection.id,
-      role: BasicMessageRole.Sender,
+      tags: { from: connection.did || '', to: connection.theirDid || '' },
     })
 
     await this.basicMessageRepository.save(basicMessageRecord)
@@ -48,14 +47,13 @@ export class BasicMessageService {
       id: message.id,
       sentTime: message.sentTime.toISOString(),
       content: message.content,
-      connectionId: connection.id,
-      role: BasicMessageRole.Receiver,
+      tags: { from: connection.theirDid || '', to: connection.did || '' },
     })
 
     await this.basicMessageRepository.save(basicMessageRecord)
     this.eventEmitter.emit<BasicMessageReceivedEvent>({
       type: BasicMessageEventTypes.BasicMessageReceived,
-      payload: { message, basicMessageRecord },
+      payload: { message, verkey: connection.verkey },
     })
   }
 

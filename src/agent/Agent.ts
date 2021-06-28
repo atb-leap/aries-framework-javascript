@@ -2,7 +2,7 @@ import type { Logger } from '../logger'
 import type { MessageRepository } from '../storage/MessageRepository'
 import type { InboundTransporter } from '../transport/InboundTransporter'
 import type { OutboundTransporter } from '../transport/OutboundTransporter'
-import type { InitConfig } from '../types'
+import type { InitConfig, OutboundMessage } from '../types'
 import type { Wallet } from '../wallet/Wallet'
 import type { AgentMessageReceivedEvent } from './Events'
 import type { TransportSession } from './TransportService'
@@ -18,7 +18,8 @@ import { ConnectionsModule } from '../modules/connections/ConnectionsModule'
 import { CredentialsModule } from '../modules/credentials/CredentialsModule'
 import { LedgerModule } from '../modules/ledger/LedgerModule'
 import { ProofsModule } from '../modules/proofs/ProofsModule'
-import { RoutingModule } from '../modules/routing/RoutingModule'
+import { MediatorModule } from '../modules/routing/MediatorModule'
+import { RecipientModule } from '../modules/routing/RecipientModule'
 import { InMemoryMessageRepository } from '../storage/InMemoryMessageRepository'
 import { IndyStorageService } from '../storage/IndyStorageService'
 import { IndyWallet } from '../wallet/IndyWallet'
@@ -43,10 +44,11 @@ export class Agent {
 
   public readonly connections!: ConnectionsModule
   public readonly proofs!: ProofsModule
-  public readonly routing!: RoutingModule
   public readonly basicMessages!: BasicMessagesModule
   public readonly ledger!: LedgerModule
   public readonly credentials!: CredentialsModule
+  public readonly mediationRecipient!: RecipientModule
+  public readonly mediator!: MediatorModule
 
   public constructor(initialConfig: InitConfig, messageRepository?: MessageRepository) {
     // Create child container so we don't interfere with anything outside of this agent
@@ -92,7 +94,8 @@ export class Agent {
     this.connections = this.container.resolve(ConnectionsModule)
     this.credentials = this.container.resolve(CredentialsModule)
     this.proofs = this.container.resolve(ProofsModule)
-    this.routing = this.container.resolve(RoutingModule)
+    this.mediator = this.container.resolve(MediatorModule)
+    this.mediationRecipient = this.container.resolve(RecipientModule)
     this.basicMessages = this.container.resolve(BasicMessagesModule)
     this.ledger = this.container.resolve(LedgerModule)
 
@@ -136,24 +139,36 @@ export class Agent {
       await this.inboundTransporter.start(this)
     }
 
+    await this.mediationRecipient.init(this.connections)
+    const defaultMediator = await this.mediationRecipient.getDefaultMediatorConnection()
+    if (defaultMediator) {
+      // TODO: update with batch pickup protocol.
+      this.connections.pingMediator(defaultMediator)
+    }
     this._isInitialized = true
   }
 
   public get publicDid() {
     return this.wallet.publicDid
   }
-
-  public getMediatorUrl() {
-    return this.agentConfig.mediatorUrl
+  public async preparePackMessage(outboundMessage: OutboundMessage) {
+    return await this.messageSender.packOutBoundMessage(outboundMessage)
   }
+  public async getMediatorUrl() {
+    const defaultMediator = await this.mediationRecipient.getDefaultMediator()
 
+    return defaultMediator?.endpoint ?? this.agentConfig.getEndpoint()
+  }
+  public getPort() {
+    return this.agentConfig.myPort
+  }
   public async receiveMessage(inboundPackedMessage: unknown, session?: TransportSession) {
     return await this.messageReceiver.receiveMessage(inboundPackedMessage, session)
   }
 
-  public async closeAndDeleteWallet() {
+  public async closeAndDeleteWallet(): Promise<void> {
     await this.wallet.close()
-    await this.wallet.delete()
+    return await this.wallet.delete()
   }
 
   public get injectionContainer() {

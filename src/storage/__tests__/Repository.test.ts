@@ -1,5 +1,3 @@
-import type { TagsBase } from '../BaseRecord'
-
 import { mockFunction } from '../../__tests__/helpers'
 import { AriesFrameworkError, RecordDuplicateError, RecordNotFoundError } from '../../error'
 import { IndyStorageService } from '../IndyStorageService'
@@ -20,7 +18,7 @@ describe('Repository', () => {
     repository = new Repository(TestRecord, storageMock)
   })
 
-  const getRecord = ({ id, tags }: { id?: string; tags?: TagsBase } = {}) => {
+  const getRecord = ({ id, tags }: { id?: string; tags?: Record<string, string> } = {}) => {
     return new TestRecord({
       id,
       foo: 'bar',

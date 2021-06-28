@@ -1,5 +1,3 @@
-import type { TagsBase } from '../BaseRecord'
-
 import { getBaseConfig } from '../../__tests__/helpers'
 import { AgentConfig } from '../../agent/AgentConfig'
 import { RecordDuplicateError, RecordNotFoundError } from '../../error'
@@ -23,7 +21,7 @@ describe('IndyStorageService', () => {
     await wallet.delete()
   })
 
-  const insertRecord = async ({ id, tags }: { id?: string; tags?: TagsBase }) => {
+  const insertRecord = async ({ id, tags }: { id?: string; tags?: Record<string, string> } = {}) => {
     const props = {
       id,
       foo: 'bar',
@@ -33,46 +31,6 @@ describe('IndyStorageService', () => {
     await storageService.save(record)
     return record
   }
-
-  describe('tag transformation', () => {
-    it('should correctly transform tag values to string before storing', async () => {
-      const record = await insertRecord({
-        id: 'test-id',
-        tags: {
-          someBoolean: true,
-          someOtherBoolean: false,
-          someStringValue: 'string',
-        },
-      })
-
-      const got = await wallet.getWalletRecord(record.type, record.id, {
-        retrieveType: true,
-        retrieveTags: true,
-      })
-
-      expect(got.tags).toEqual({
-        someBoolean: '1',
-        someOtherBoolean: '0',
-        someStringValue: 'string',
-      })
-    })
-
-    it('should correctly transform tag values from string after retrieving', async () => {
-      await wallet.addWalletRecord(TestRecord.type, 'some-id', '{}', {
-        someBoolean: '1',
-        someOtherBoolean: '0',
-        someStringValue: 'string',
-      })
-
-      const record = await storageService.getById(TestRecord, 'some-id')
-
-      expect(record.getTags()).toEqual({
-        someBoolean: true,
-        someOtherBoolean: false,
-        someStringValue: 'string',
-      })
-    })
-  })
 
   describe('save()', () => {
     it('should throw RecordDuplicateError if a record with the id already exists', async () => {
@@ -118,7 +76,7 @@ describe('IndyStorageService', () => {
     it('should update the record', async () => {
       const record = await insertRecord({ id: 'test-id' })
 
-      record.replaceTags({ ...record.getTags(), foo: 'bar' })
+      record.tags = { ...record.tags, foo: 'bar' }
       record.foo = 'foobaz'
       await storageService.update(record)
 

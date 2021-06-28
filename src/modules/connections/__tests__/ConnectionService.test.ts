@@ -1,8 +1,12 @@
 import type { Wallet } from '../../../wallet/Wallet'
 
 import { getBaseConfig, getMockConnection, mockFunction } from '../../../__tests__/helpers'
+import testLogger from '../../../__tests__/logger'
 import { AgentConfig } from '../../../agent/AgentConfig'
+import { EnvelopeService } from '../../../agent/EnvelopeService'
 import { EventEmitter } from '../../../agent/EventEmitter'
+import { MessageSender } from '../../../agent/MessageSender'
+import { TransportService } from '../../../agent/TransportService'
 import { InboundMessageContext } from '../../../agent/models/InboundMessageContext'
 import { SignatureDecorator } from '../../../decorators/signature/SignatureDecorator'
 import { signData, unpackAndVerifySignatureDecorator } from '../../../decorators/signature/SignatureDecoratorUtils'
@@ -22,8 +26,15 @@ import { ConnectionRepository } from '../repository/ConnectionRepository'
 import { ConnectionService } from '../services/ConnectionService'
 
 jest.mock('../repository/ConnectionRepository')
-const ConnectionRepositoryMock = ConnectionRepository as jest.Mock<ConnectionRepository>
+jest.mock('../../routing/repository/MediationRepository')
+jest.mock('../../../agent/TransportService')
+jest.mock('../../../agent/EnvelopeService')
 
+const logger = testLogger
+const ConnectionRepositoryMock = ConnectionRepository as jest.Mock<ConnectionRepository>
+const MessageSenderMock = MessageSender as jest.Mock<MessageSender>
+const TransportServiceMock = TransportService as jest.Mock<TransportService>
+const EnvelopeServiceMock = EnvelopeService as jest.Mock<EnvelopeService>
 describe('ConnectionService', () => {
   const initConfig = getBaseConfig('ConnectionServiceTest', {
     host: 'http://agent.com',
@@ -35,6 +46,7 @@ describe('ConnectionService', () => {
   let connectionRepository: ConnectionRepository
   let connectionService: ConnectionService
   let eventEmitter: EventEmitter
+  let messageSender: MessageSender
 
   beforeAll(async () => {
     agentConfig = new AgentConfig(initConfig)
@@ -50,7 +62,8 @@ describe('ConnectionService', () => {
   beforeEach(() => {
     eventEmitter = new EventEmitter()
     connectionRepository = new ConnectionRepositoryMock()
-    connectionService = new ConnectionService(wallet, agentConfig, connectionRepository, eventEmitter)
+    messageSender = new MessageSenderMock(new EnvelopeServiceMock(), new TransportServiceMock(), logger)
+    connectionService = new ConnectionService(wallet, agentConfig, connectionRepository, eventEmitter, messageSender)
   })
 
   describe('createConnectionWithInvitation', () => {
@@ -65,7 +78,7 @@ describe('ConnectionService', () => {
       expect(connectionRecord.autoAcceptConnection).toBeUndefined()
       expect(connectionRecord.id).toEqual(expect.any(String))
       expect(connectionRecord.verkey).toEqual(expect.any(String))
-      expect(connectionRecord.getTags()).toEqual(
+      expect(connectionRecord.tags).toEqual(
         expect.objectContaining({
           verkey: connectionRecord.verkey,
         })
@@ -143,7 +156,7 @@ describe('ConnectionService', () => {
       expect(connection.autoAcceptConnection).toBeUndefined()
       expect(connection.id).toEqual(expect.any(String))
       expect(connection.verkey).toEqual(expect.any(String))
-      expect(connection.getTags()).toEqual(
+      expect(connection.tags).toEqual(
         expect.objectContaining({
           verkey: connection.verkey,
           invitationKey: recipientKey,
@@ -275,9 +288,10 @@ describe('ConnectionService', () => {
 
       expect(processedConnection.state).toBe(ConnectionState.Requested)
       expect(processedConnection.theirDid).toBe(theirDid)
+      // TODO: we should transform theirDidDoc to didDoc instance after retrieving from persistence
       expect(processedConnection.theirDidDoc).toEqual(theirDidDoc)
-      expect(processedConnection.theirKey).toBe(theirVerkey)
-      expect(processedConnection.threadId).toBe(connectionRequest.id)
+      expect(processedConnection.tags.theirKey).toBe(theirVerkey)
+      expect(processedConnection.tags.threadId).toBe(connectionRequest.id)
     })
 
     it('throws an error when the message context does not have a connection', async () => {
@@ -433,12 +447,10 @@ describe('ConnectionService', () => {
         verkey,
         state: ConnectionState.Requested,
         role: ConnectionRole.Invitee,
-        invitation: new ConnectionInvitationMessage({
-          label: 'test',
+        tags: {
           // processResponse checks wether invitation key is same as signing key for connetion~sig
-          recipientKeys: [theirVerkey],
-          serviceEndpoint: 'test',
-        }),
+          invitationKey: theirVerkey,
+        },
       })
 
       const otherPartyConnection = new Connection({
@@ -575,12 +587,10 @@ describe('ConnectionService', () => {
         did,
         verkey,
         state: ConnectionState.Requested,
-        invitation: new ConnectionInvitationMessage({
-          label: 'test',
+        tags: {
           // processResponse checks wether invitation key is same as signing key for connetion~sig
-          recipientKeys: [theirVerkey],
-          serviceEndpoint: 'test',
-        }),
+          invitationKey: theirVerkey,
+        },
         theirDid: undefined,
         theirDidDoc: undefined,
       })

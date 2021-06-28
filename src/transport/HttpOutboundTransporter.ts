@@ -33,31 +33,49 @@ export class HttpOutboundTransporter implements OutboundTransporter {
   }
 
   public async sendMessage(outboundPackage: OutboundPackage) {
-    const { payload, endpoint, responseRequested } = outboundPackage
+    const { connection, payload, endpoint } = outboundPackage
 
     if (!endpoint) {
       throw new Error(`Missing endpoint. I don't know how and where to send the message.`)
+      return
     }
-
+    // TODO: use mediation config for queue logic
+    if (endpoint == 'didcomm:transport/queue') {
+      this.logger.debug('Storing message for queue: ', { connection, payload })
+      connection.assertReady()
+      if (connection && connection.theirKey) {
+        this.agent.mediator.queueMessage(connection.theirKey, payload)
+      }
+      return
+    }
     this.logger.debug(
       `Sending outbound message to connection ${outboundPackage.connection.id}`,
       outboundPackage.payload
     )
 
     try {
-      const response = await fetch(endpoint, {
+      const response = fetch(endpoint, {
         method: 'POST',
         body: JSON.stringify(payload),
         headers: { 'Content-Type': this.agentConfig.didCommMimeType },
       })
-      const responseMessage = await response.text()
+
+      const action = await Promise.race([
+        response,
+        new Promise((accept) => {
+          setTimeout(() => accept(false), 15000)
+        }),
+      ])
+      const responseMessage = action ? await (action as Response).text() : false
 
       // TODO: do we just want to ignore messages that were
       // returned if we didn't request it?
-      if (responseMessage && responseRequested) {
+      if (responseMessage) {
         this.logger.debug(`Response received:\n ${response}`)
         const wireMessage = JSON.parse(responseMessage)
         this.agent.receiveMessage(wireMessage)
+      } else {
+        this.logger.debug(`No response received.`)
       }
     } catch (error) {
       this.logger.error(`Error sending message to ${endpoint}`, {

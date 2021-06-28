@@ -1,4 +1,4 @@
-import type { TagsBase } from '../../../storage/BaseRecord'
+import type { Tags } from '../../../storage/BaseRecord'
 import type { CredentialState } from '../CredentialState'
 
 import { Type } from 'class-transformer'
@@ -21,16 +21,15 @@ export interface CredentialRecordMetadata {
   schemaId?: string
 }
 
-export interface CredentialRecordProps {
+export interface CredentialStorageProps {
   id?: string
   createdAt?: Date
   state: CredentialState
   connectionId: string
-  threadId: string
 
   credentialId?: string
   metadata?: CredentialRecordMetadata
-  tags?: CustomCredentialTags
+  tags: CredentialRecordTags
   proposalMessage?: ProposeCredentialMessage
   offerMessage?: OfferCredentialMessage
   requestMessage?: RequestCredentialMessage
@@ -38,17 +37,15 @@ export interface CredentialRecordProps {
   credentialAttributes?: CredentialPreviewAttribute[]
 }
 
-export type CustomCredentialTags = TagsBase
-export type DefaultCredentialTags = {
+export interface CredentialRecordTags extends Tags {
   threadId: string
   connectionId: string
-  state: CredentialState
 }
 
-export class CredentialRecord extends BaseRecord<DefaultCredentialTags, CustomCredentialTags> {
+export class CredentialRecord extends BaseRecord implements CredentialStorageProps {
   public connectionId!: string
-  public threadId!: string
   public credentialId?: string
+  public tags!: CredentialRecordTags
   public state!: CredentialState
   public metadata!: CredentialRecordMetadata
 
@@ -68,7 +65,7 @@ export class CredentialRecord extends BaseRecord<DefaultCredentialTags, CustomCr
   public static readonly type = 'CredentialRecord'
   public readonly type = CredentialRecord.type
 
-  public constructor(props: CredentialRecordProps) {
+  public constructor(props: CredentialStorageProps) {
     super()
 
     if (props) {
@@ -78,23 +75,13 @@ export class CredentialRecord extends BaseRecord<DefaultCredentialTags, CustomCr
       this.connectionId = props.connectionId
       this.metadata = props.metadata ?? {}
       this.credentialId = props.credentialId
-      this.threadId = props.threadId
-      this._tags = props.tags ?? {}
+      this.tags = props.tags
 
       this.proposalMessage = props.proposalMessage
       this.offerMessage = props.offerMessage
       this.requestMessage = props.requestMessage
       this.credentialMessage = props.credentialMessage
       this.credentialAttributes = props.credentialAttributes
-    }
-  }
-
-  public getTags() {
-    return {
-      ...this._tags,
-      threadId: this.threadId,
-      connectionId: this.connectionId,
-      state: this.state,
     }
   }
 

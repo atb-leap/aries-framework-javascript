@@ -1,10 +1,6 @@
 import type { Agent } from '../agent/Agent'
 import type { InboundTransporter } from './InboundTransporter'
 
-import { AriesFrameworkError } from '../error/AriesFrameworkError'
-import { fetch } from '../utils/fetch'
-import { sleep } from '../utils/sleep'
-
 export class PollingInboundTransporter implements InboundTransporter {
   public stop: boolean
   private pollingInterval: number
@@ -15,35 +11,48 @@ export class PollingInboundTransporter implements InboundTransporter {
   }
 
   public async start(agent: Agent) {
-    await this.registerMediator(agent)
-  }
-
-  public async registerMediator(agent: Agent) {
-    const mediatorUrl = agent.getMediatorUrl()
-
-    if (!mediatorUrl) {
-      throw new AriesFrameworkError(
-        'Agent has no mediator URL. Make sure to provide the `mediatorUrl` in the agent config.'
-      )
-    }
-
-    const invitationResponse = await fetch(`${mediatorUrl}/invitation`)
-    const invitationUrl = await invitationResponse.text()
-
-    const mediatorDidResponse = await fetch(`${mediatorUrl}`)
-    const { verkey } = await mediatorDidResponse.json()
-
-    await agent.routing.provision({
-      verkey,
-      invitationUrl,
-    })
-    this.pollDownloadMessages(agent)
+    await this.pollDownloadMessages(agent)
   }
 
   private async pollDownloadMessages(agent: Agent) {
-    while (!this.stop) {
-      await agent.routing.downloadMessages()
-      await sleep(this.pollingInterval)
-    }
+    setInterval(async () => {
+      if (!this.stop) {
+        const connection = await agent.mediationRecipient.getDefaultMediatorConnection()
+        if (connection && connection.state == 'complete') {
+          await agent.mediationRecipient.downloadMessages(connection)
+        }
+      }
+    }, this.pollingInterval)
+  }
+}
+
+export class TrustPingPollingInboundTransporter implements InboundTransporter {
+  public run: boolean
+  private pollingInterval: number
+
+  public constructor(pollingInterval = 5000) {
+    this.run = false
+    this.pollingInterval = pollingInterval
+  }
+
+  public async start(agent: Agent) {
+    this.run = true
+    await this.pollDownloadMessages(agent)
+  }
+
+  public async stop(): Promise<void> {
+    this.run = false
+  }
+
+  private async pollDownloadMessages(recipient: Agent) {
+    setInterval(async () => {
+      if (this.run) {
+        const connection = await recipient.mediationRecipient.getDefaultMediatorConnection()
+        if (connection && connection.state == 'complete') {
+          /*ping mediator uses a trust ping to trigger any stored messages to be sent back, one at a time.*/
+          await recipient.connections.pingMediator(connection)
+        }
+      }
+    }, this.pollingInterval)
   }
 }

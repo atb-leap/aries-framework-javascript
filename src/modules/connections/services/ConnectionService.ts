@@ -1,20 +1,27 @@
 import type { AgentMessage } from '../../../agent/AgentMessage'
 import type { InboundMessageContext } from '../../../agent/models/InboundMessageContext'
+import type { KeylistUpdatedEvent, MediationRecord } from '../../../modules/routing'
 import type { AckMessage } from '../../common'
 import type { ConnectionStateChangedEvent } from '../ConnectionEvents'
-import type { CustomConnectionTags } from '../repository/ConnectionRecord'
-import type { Verkey } from 'indy-sdk'
+import type { ConnectionTags } from '../repository/ConnectionRecord'
+import type { Did, Verkey } from 'indy-sdk'
 
 import { validateOrReject } from 'class-validator'
 import { inject, scoped, Lifecycle } from 'tsyringe'
 
 import { AgentConfig } from '../../../agent/AgentConfig'
 import { EventEmitter } from '../../../agent/EventEmitter'
+import { MessageSender } from '../../../agent/MessageSender'
+import { createOutboundMessage } from '../../../agent/helpers'
 import { InjectionSymbols } from '../../../constants'
 import { signData, unpackAndVerifySignatureDecorator } from '../../../decorators/signature/SignatureDecoratorUtils'
+import { ReturnRouteTypes } from '../../../decorators/transport/TransportDecorator'
 import { AriesFrameworkError } from '../../../error'
+import { RoutingEventTypes } from '../../../modules/routing/RoutingEvents'
+import { waitForEvent } from '../../../modules/routing/services/RoutingService'
 import { JsonTransformer } from '../../../utils/JsonTransformer'
 import { Wallet } from '../../../wallet/Wallet'
+import { KeylistUpdate, KeylistUpdateAction, KeylistUpdateMessage } from '../../routing/messages/KeylistUpdatedMessage'
 import { ConnectionEventTypes } from '../ConnectionEvents'
 import {
   ConnectionInvitationMessage,
@@ -33,8 +40,8 @@ import {
   DidCommService,
   IndyAgentService,
 } from '../models'
-import { ConnectionRepository } from '../repository'
 import { ConnectionRecord } from '../repository/ConnectionRecord'
+import { ConnectionRepository } from '../repository/ConnectionRepository'
 
 @scoped(Lifecycle.ContainerScoped)
 export class ConnectionService {
@@ -42,17 +49,20 @@ export class ConnectionService {
   private config: AgentConfig
   private connectionRepository: ConnectionRepository
   private eventEmitter: EventEmitter
+  private messageSender: MessageSender
 
   public constructor(
     @inject(InjectionSymbols.Wallet) wallet: Wallet,
     config: AgentConfig,
     connectionRepository: ConnectionRepository,
-    eventEmitter: EventEmitter
+    eventEmitter: EventEmitter,
+    messageSender: MessageSender
   ) {
     this.wallet = wallet
     this.config = config
     this.connectionRepository = connectionRepository
     this.eventEmitter = eventEmitter
+    this.messageSender = messageSender
   }
 
   /**
@@ -64,12 +74,18 @@ export class ConnectionService {
   public async createInvitation(config?: {
     autoAcceptConnection?: boolean
     alias?: string
-  }): Promise<ConnectionProtocolMsgReturnType<ConnectionInvitationMessage>> {
+    mediator?: MediationRecord
+    routingKeys?: string[]
+    endpoint?: string
+  }) {
     // TODO: public did, multi use
     const connectionRecord = await this.createConnection({
       role: ConnectionRole.Inviter,
       state: ConnectionState.Invited,
       alias: config?.alias,
+      mediator: config?.mediator,
+      routingKeys: config?.routingKeys,
+      endpoint: config?.endpoint,
       autoAcceptConnection: config?.autoAcceptConnection,
     })
 
@@ -111,6 +127,7 @@ export class ConnectionService {
     config?: {
       autoAcceptConnection?: boolean
       alias?: string
+      mediator?: MediationRecord
     }
   ): Promise<ConnectionRecord> {
     const connectionRecord = await this.createConnection({
@@ -118,12 +135,12 @@ export class ConnectionService {
       state: ConnectionState.Invited,
       alias: config?.alias,
       autoAcceptConnection: config?.autoAcceptConnection,
+      mediator: config?.mediator,
       invitation,
       tags: {
         invitationKey: invitation.recipientKeys && invitation.recipientKeys[0],
       },
     })
-
     await this.connectionRepository.update(connectionRecord)
     this.eventEmitter.emit<ConnectionStateChangedEvent>({
       type: ConnectionEventTypes.ConnectionStateChanged,
@@ -179,7 +196,6 @@ export class ConnectionService {
     if (!connectionRecord) {
       throw new AriesFrameworkError(`Connection for verkey ${recipientVerkey} not found!`)
     }
-
     connectionRecord.assertState(ConnectionState.Invited)
     connectionRecord.assertRole(ConnectionRole.Inviter)
 
@@ -190,10 +206,15 @@ export class ConnectionService {
 
     connectionRecord.theirDid = message.connection.did
     connectionRecord.theirDidDoc = message.connection.didDoc
-    connectionRecord.threadId = message.id
 
     if (!connectionRecord.theirKey) {
       throw new AriesFrameworkError(`Connection with id ${connectionRecord.id} has no recipient keys.`)
+    }
+
+    connectionRecord.tags = {
+      ...connectionRecord.tags,
+      theirKey: connectionRecord.theirKey,
+      threadId: message.id,
     }
 
     await this.updateState(connectionRecord, ConnectionState.Requested)
@@ -222,12 +243,14 @@ export class ConnectionService {
 
     const connectionJson = JsonTransformer.toJSON(connection)
 
-    if (!connectionRecord.threadId) {
+    const { threadId } = connectionRecord.tags
+
+    if (!threadId) {
       throw new AriesFrameworkError(`Connection record with id ${connectionId} does not have a thread id`)
     }
 
     const connectionResponse = new ConnectionResponseMessage({
-      threadId: connectionRecord.threadId,
+      threadId,
       connectionSig: await signData(connectionJson, this.wallet, connectionRecord.verkey),
     })
 
@@ -268,7 +291,7 @@ export class ConnectionService {
     // Per the Connection RFC we must check if the key used to sign the connection~sig is the same key
     // as the recipient key(s) in the connection invitation message
     const signerVerkey = message.connectionSig.signer
-    const invitationKey = connectionRecord.getTags().invitationKey
+    const invitationKey = connectionRecord.tags.invitationKey
     if (signerVerkey !== invitationKey) {
       throw new AriesFrameworkError(
         'Connection in connection response is not signed with same key as recipient key in invitation'
@@ -277,10 +300,15 @@ export class ConnectionService {
 
     connectionRecord.theirDid = connection.did
     connectionRecord.theirDidDoc = connection.didDoc
-    connectionRecord.threadId = message.threadId
 
     if (!connectionRecord.theirKey) {
       throw new AriesFrameworkError(`Connection with id ${connectionRecord.id} has no recipient keys.`)
+    }
+
+    connectionRecord.tags = {
+      ...connectionRecord.tags,
+      theirKey: connectionRecord.theirKey,
+      threadId: message.threadId,
     }
 
     await this.updateState(connectionRecord, ConnectionState.Responded)
@@ -418,17 +446,88 @@ export class ConnectionService {
     return this.connectionRepository.getSingleByQuery({ threadId })
   }
 
+  private async getRouting(mediationRecord: MediationRecord | undefined, routingKeys: string[], my_endpoint?: string) {
+    let endpoint
+    if (mediationRecord) {
+      routingKeys = [...routingKeys, ...mediationRecord.routingKeys]
+      endpoint = mediationRecord.endpoint
+    }
+    // Create and store new key
+    const did_data = await this.wallet.createDid()
+    if (mediationRecord) {
+      // new did has been created and mediator needs to be updated with the public key.
+      mediationRecord = await this.keylistUpdatdAndAwait(mediationRecord, did_data[1])
+    } else {
+      // TODO: register recipient keys for relay
+      // TODO: check that recipient keys are in wallet
+    }
+    endpoint = endpoint ?? my_endpoint ?? this.config.getEndpoint()
+    const result = { mediationRecord, endpoint, routingKeys, did: did_data[0], verkey: did_data[1] }
+    return result
+  }
+
+  public async keylistUpdatdAndAwait(
+    mediationRecord: MediationRecord,
+    verKey: string,
+    timeout = 15000 // TODO: this should be a configurable value in agent config
+  ): Promise<MediationRecord> {
+    const message = this.createKeylistUpdateMessage(verKey)
+    const connection = await this.getById(mediationRecord.connectionId)
+
+    const sendUpdateKeylist = async () => {
+      message.setReturnRouting(ReturnRouteTypes.all) // return message on request response
+      const outboundMessage = createOutboundMessage(connection, message)
+      await this.messageSender.sendMessage(outboundMessage)
+    }
+    const condition = async (event: KeylistUpdatedEvent) => {
+      return mediationRecord.id === event.payload.mediationRecord.id
+    }
+    const results = await waitForEvent(
+      sendUpdateKeylist,
+      RoutingEventTypes.RecipientKeylistUpdated,
+      condition,
+      timeout,
+      this.eventEmitter
+    )
+    return (results as KeylistUpdatedEvent).payload.mediationRecord
+  }
+
+  public createKeylistUpdateMessage(verkey: Verkey): KeylistUpdateMessage {
+    const keylistUpdateMessage = new KeylistUpdateMessage({
+      updates: [
+        new KeylistUpdate({
+          action: KeylistUpdateAction.add,
+          recipientKey: verkey,
+        }),
+      ],
+    })
+    return keylistUpdateMessage
+  }
+
   private async createConnection(options: {
     role: ConnectionRole
     state: ConnectionState
+    endpoint?: string
     invitation?: ConnectionInvitationMessage
     alias?: string
+    mediator?: MediationRecord
+    routingKeys?: string[]
     autoAcceptConnection?: boolean
-    tags?: CustomConnectionTags
+    tags?: ConnectionTags
   }): Promise<ConnectionRecord> {
-    const [did, verkey] = await this.wallet.createDid()
+    const myRouting = await this.getRouting(
+      //my routing
+      options.mediator,
+      options.routingKeys ?? [],
+      options.endpoint
+    )
+    const endpoint: string = myRouting.endpoint
+    const did: Did = myRouting.did
+    const verkey: Verkey = myRouting.verkey || ''
+    const routingKeys: Verkey[] = myRouting.routingKeys
 
     const publicKey = new Ed25119Sig2018({
+      // TODO: shouldn't this name be ED25519
       id: `${did}#1`,
       controller: did,
       publicKeyBase58: verkey,
@@ -439,15 +538,15 @@ export class ConnectionService {
     // Include both for better interoperability
     const indyAgentService = new IndyAgentService({
       id: `${did}#IndyAgentService`,
-      serviceEndpoint: this.config.getEndpoint(),
+      serviceEndpoint: endpoint,
       recipientKeys: [verkey],
-      routingKeys: this.config.getRoutingKeys(),
+      routingKeys: routingKeys,
     })
     const didCommService = new DidCommService({
       id: `${did}#did-communication`,
-      serviceEndpoint: this.config.getEndpoint(),
+      serviceEndpoint: endpoint,
       recipientKeys: [verkey],
-      routingKeys: this.config.getRoutingKeys(),
+      routingKeys: routingKeys,
       // Prefer DidCommService over IndyAgentService
       priority: 1,
     })
@@ -469,7 +568,10 @@ export class ConnectionService {
       verkey,
       state: options.state,
       role: options.role,
-      tags: options.tags,
+      tags: {
+        verkey,
+        ...options.tags,
+      },
       invitation: options.invitation,
       alias: options.alias,
       autoAcceptConnection: options.autoAcceptConnection,
@@ -497,7 +599,7 @@ export class ConnectionService {
 
     // Check if already done
     const connection = await this.connectionRepository.findById(connectionId)
-    if (connection && isConnected(connection)) return connection
+    if (connection && isConnected(connection)) return connection //TODO: check if this leaves trailing listeners behind?
 
     // return listener
     return promise

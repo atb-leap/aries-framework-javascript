@@ -1,14 +1,17 @@
-import type { Agent } from '../agent/Agent'
+import type { Agent, InboundTransporter, OutboundTransporter } from '..'
 import type { BasicMessage, BasicMessageReceivedEvent } from '../modules/basic-messages'
-import type { ConnectionRecordProps } from '../modules/connections'
+import type { ConnectionStorageProps } from '../modules/connections'
 import type { CredentialRecord, CredentialOfferTemplate, CredentialStateChangedEvent } from '../modules/credentials'
 import type { SchemaTemplate, CredentialDefinitionTemplate } from '../modules/ledger'
 import type { ProofRecord, ProofState, ProofStateChangedEvent } from '../modules/proofs'
-import type { InboundTransporter, OutboundTransporter } from '../transport'
 import type { InitConfig, OutboundPackage, WireMessage } from '../types'
-import type { Schema, CredDef, Did } from 'indy-sdk'
+import type { Express } from 'express'
+import type { Server } from 'http'
+import type { CredDef, Did, Schema } from 'indy-sdk'
 import type { Subject } from 'rxjs'
 
+import cors from 'cors'
+import express from 'express'
 import indy from 'indy-sdk'
 import path from 'path'
 
@@ -21,7 +24,7 @@ import {
   DidCommService,
   DidDoc,
 } from '../modules/connections'
-import { CredentialState, CredentialEventTypes } from '../modules/credentials'
+import { CredentialEventTypes, CredentialState } from '../modules/credentials'
 import { ProofEventTypes } from '../modules/proofs'
 import { NodeFileSystem } from '../storage/fs/NodeFileSystem'
 
@@ -36,7 +39,8 @@ export const publicDidSeed = process.env.TEST_AGENT_PUBLIC_DID_SEED ?? '00000000
 export function getBaseConfig(name: string, extraConfig: Partial<InitConfig> = {}) {
   const config: InitConfig = {
     label: `Agent: ${name}`,
-    mediatorUrl: 'http://localhost:3001',
+    // host: 'http://localhost',
+    // port: '3001',
     walletConfig: { id: `Wallet: ${name}` },
     walletCredentials: { key: `Key: ${name}` },
     publicDidSeed,
@@ -66,7 +70,7 @@ export async function waitForProofRecord(
   return new Promise((resolve) => {
     const listener = (event: ProofStateChangedEvent) => {
       const previousStateMatches = previousState === undefined || event.payload.previousState === previousState
-      const threadIdMatches = threadId === undefined || event.payload.proofRecord.threadId === threadId
+      const threadIdMatches = threadId === undefined || event.payload.proofRecord.tags.threadId === threadId
       const stateMatches = state === undefined || event.payload.proofRecord.state === state
 
       if (previousStateMatches && threadIdMatches && stateMatches) {
@@ -95,7 +99,7 @@ export async function waitForCredentialRecord(
   return new Promise((resolve) => {
     const listener = (event: CredentialStateChangedEvent) => {
       const previousStateMatches = previousState === undefined || event.payload.previousState === previousState
-      const threadIdMatches = threadId === undefined || event.payload.credentialRecord.threadId === threadId
+      const threadIdMatches = threadId === undefined || event.payload.credentialRecord.tags.threadId === threadId
       const stateMatches = state === undefined || event.payload.credentialRecord.state === state
 
       if (previousStateMatches && threadIdMatches && stateMatches) {
@@ -109,12 +113,16 @@ export async function waitForCredentialRecord(
   })
 }
 
-export async function waitForBasicMessage(agent: Agent, { content }: { content?: string }): Promise<BasicMessage> {
+export async function waitForBasicMessage(
+  agent: Agent,
+  { verkey, content }: { verkey?: string; content?: string }
+): Promise<BasicMessage> {
   return new Promise((resolve) => {
     const listener = (event: BasicMessageReceivedEvent) => {
+      const verkeyMatches = verkey === undefined || event.payload.verkey === verkey
       const contentMatches = content === undefined || event.payload.message.content === content
 
-      if (contentMatches) {
+      if (verkeyMatches && contentMatches) {
         agent.events.off<BasicMessageReceivedEvent>(BasicMessageEventTypes.BasicMessageReceived, listener)
 
         resolve(event.payload.message)
@@ -179,7 +187,6 @@ export function getMockConnection({
   role = ConnectionRole.Invitee,
   id = 'test',
   did = 'test-did',
-  threadId = 'threadId',
   verkey = 'key-1',
   didDoc = new DidDoc({
     id: did,
@@ -212,11 +219,10 @@ export function getMockConnection({
       }),
     ],
   }),
-}: Partial<ConnectionRecordProps> = {}) {
+}: Partial<ConnectionStorageProps> = {}) {
   return new ConnectionRecord({
     did,
     didDoc,
-    threadId,
     theirDid,
     theirDidDoc,
     id,
@@ -228,9 +234,17 @@ export function getMockConnection({
   })
 }
 
-export async function makeConnection(agentA: Agent, agentB: Agent) {
+export async function makeConnection(
+  agentA: Agent,
+  agentB: Agent,
+  config?: {
+    autoAcceptConnection?: boolean
+    alias?: string
+    mediatorId?: string
+  }
+) {
   // eslint-disable-next-line prefer-const
-  let { invitation, connectionRecord: agentAConnection } = await agentA.connections.createConnection()
+  let { invitation, connectionRecord: agentAConnection } = await agentA.connections.createConnection(config)
   let agentBConnection = await agentB.connections.receiveInvitation(invitation)
 
   agentAConnection = await agentA.connections.returnWhenIsConnected(agentAConnection.id)
@@ -239,6 +253,56 @@ export async function makeConnection(agentA: Agent, agentB: Agent) {
   return {
     agentAConnection,
     agentBConnection,
+  }
+}
+
+export async function makeTransport(
+  agent: Agent,
+  inboundTransporter: InboundTransporter,
+  outboundTransporter: OutboundTransporter
+) {
+  agent.setInboundTransporter(inboundTransporter)
+  agent.setOutboundTransporter(outboundTransporter)
+  await agent.init()
+}
+
+export function makeInBoundTransporter() {
+  const app = express()
+  app.use(cors())
+  app.use(express.json())
+  app.use(
+    express.text({
+      type: ['application/ssi-agent-wire', 'text/plain'],
+    })
+  )
+  app.set('json spaces', 2)
+  return new mockInBoundTransporter(app)
+}
+
+export class mockInBoundTransporter implements InboundTransporter {
+  private app: Express
+  public server?: Server
+  public constructor(app: Express) {
+    this.app = app
+  }
+  public async start(agent: Agent) {
+    this.app.post('/msg', async (req, res) => {
+      const packedMessage = JSON.parse(req.body)
+      try {
+        const outboundMessage = await agent.receiveMessage(packedMessage)
+        if (outboundMessage) {
+          res.status(200).json(outboundMessage.payload).end()
+        } else {
+          res.status(200).end()
+        }
+      } catch (e) {
+        res.status(200).end()
+      }
+    })
+    this.server = this.app.listen(agent.getPort())
+  }
+  public async stop(): Promise<void> {
+    this.server?.close()
   }
 }
 
@@ -282,28 +346,28 @@ export async function issueCredential({
   let issuerCredentialRecord = await issuerAgent.credentials.offerCredential(issuerConnectionId, credentialTemplate)
 
   let holderCredentialRecord = await waitForCredentialRecord(holderAgent, {
-    threadId: issuerCredentialRecord.threadId,
+    threadId: issuerCredentialRecord.tags.threadId,
     state: CredentialState.OfferReceived,
   })
 
   holderCredentialRecord = await holderAgent.credentials.acceptOffer(holderCredentialRecord.id)
 
   issuerCredentialRecord = await waitForCredentialRecord(issuerAgent, {
-    threadId: holderCredentialRecord.threadId,
+    threadId: holderCredentialRecord.tags.threadId,
     state: CredentialState.RequestReceived,
   })
 
   issuerCredentialRecord = await issuerAgent.credentials.acceptRequest(issuerCredentialRecord.id)
 
   holderCredentialRecord = await waitForCredentialRecord(holderAgent, {
-    threadId: issuerCredentialRecord.threadId,
+    threadId: issuerCredentialRecord.tags.threadId,
     state: CredentialState.CredentialReceived,
   })
 
   holderCredentialRecord = await holderAgent.credentials.acceptCredential(holderCredentialRecord.id)
 
   issuerCredentialRecord = await waitForCredentialRecord(issuerAgent, {
-    threadId: issuerCredentialRecord.threadId,
+    threadId: issuerCredentialRecord.tags.threadId,
     state: CredentialState.Done,
   })
 

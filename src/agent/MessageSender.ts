@@ -42,11 +42,7 @@ export class MessageSender {
     return { connection, payload: wireMessage }
   }
 
-  public async sendMessage(outboundMessage: OutboundMessage): Promise<void> {
-    if (!this.outboundTransporter) {
-      throw new AriesFrameworkError('Agent has no outbound transporter!')
-    }
-
+  public async packOutBoundMessage(outboundMessage: OutboundMessage) {
     const { connection, payload } = outboundMessage
     const { id, verkey, theirKey } = connection
     const message = payload.toJSON()
@@ -61,7 +57,7 @@ export class MessageSender {
     }
 
     for await (const service of services) {
-      this.logger.debug(`Sending outbound message to service:`, { messageId: message.id, service })
+      this.logger.debug(`Preparing outbound message to service:`, { messageId: message.id, service })
       try {
         const keys = {
           recipientKeys: service.recipientKeys,
@@ -72,18 +68,26 @@ export class MessageSender {
         outboundPackage.session = this.transportService.findSession(connection.id)
         outboundPackage.endpoint = service.serviceEndpoint
         outboundPackage.responseRequested = outboundMessage.payload.hasReturnRouting()
-
-        await this.outboundTransporter.sendMessage(outboundPackage)
-        break
+        return outboundPackage
       } catch (error) {
         this.logger.debug(
-          `Sending outbound message to service with id ${service.id} failed with the following error:`,
+          `Prepareing outbound message to service with id ${service.id} failed with the following error:`,
           {
             message: error.message,
             error: error,
           }
         )
       }
+    }
+  }
+
+  public async sendMessage(outboundMessage: OutboundMessage): Promise<void> {
+    if (!this.outboundTransporter) {
+      throw new AriesFrameworkError('Agent has no outbound transporter!')
+    }
+    const message = await this.packOutBoundMessage(outboundMessage)
+    if (message) {
+      await this.outboundTransporter.sendMessage(message)
     }
   }
 }

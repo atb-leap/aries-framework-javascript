@@ -4,8 +4,7 @@ import type { WalletQuery } from 'indy-sdk'
 
 import { RecordDuplicateError, RecordNotFoundError } from '../error'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export class Repository<T extends BaseRecord<any, any>> {
+export class Repository<T extends BaseRecord> {
   private storageService: StorageService<T>
   private recordClass: BaseRecordConstructor<T>
 

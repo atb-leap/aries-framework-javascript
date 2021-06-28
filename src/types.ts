@@ -22,6 +22,7 @@ export interface InitConfig {
   label: string
   publicDidSeed?: string
   mediatorUrl?: string
+  mediatorRecordId?: string
   walletConfig: WalletConfig
   walletCredentials: WalletCredentials
   autoAcceptConnections?: boolean
@@ -34,6 +35,11 @@ export interface InitConfig {
   // Either path or transactions string can be provided
   genesisPath?: string
   genesisTransactions?: string
+
+  autoAcceptMediationRequests?: boolean
+  mediatorConnectionsInvite?: string
+  defaultMediatorId?: string
+  clearDefaultMediator?: boolean
 }
 
 export interface UnpackedMessage {
