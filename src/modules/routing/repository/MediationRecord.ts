@@ -1,4 +1,4 @@
-import type { Tags } from '../../../storage/BaseRecord'
+import type { TagsBase } from '../../../storage/BaseRecord'
 import type { MediationRole } from '../models/MediationRole'
 import type { Verkey } from 'indy-sdk'
 
@@ -17,21 +17,22 @@ export interface MediationRecordProps {
   recipientKeys?: Verkey[]
   routingKeys?: Verkey[]
   default?: boolean
+  tags?: CustomMediationTags
 }
 
-export interface MediationTags extends Tags {
-  role?: MediationRole
-  connectionId?: string
+export type CustomMediationTags = TagsBase
+export type DefaultMediationTags = {
+  role: MediationRole
+  connectionId: string
+  state: MediationState
 }
 
-export interface MediationStorageProps extends MediationRecordProps {
-  tags: MediationTags
-}
-
-export class MediationRecord extends BaseRecord implements MediationStorageProps {
+export class MediationRecord
+  extends BaseRecord<DefaultMediationTags, CustomMediationTags>
+  implements MediationRecordProps
+{
   public state!: MediationState
   public role!: MediationRole
-  public tags!: MediationTags
   public connectionId!: string
   public endpoint?: string
   public recipientKeys!: Verkey[]
@@ -40,15 +41,15 @@ export class MediationRecord extends BaseRecord implements MediationStorageProps
   public static readonly type = 'MediationRecord'
   public readonly type = MediationRecord.type
 
-  public constructor(props: MediationStorageProps) {
+  public constructor(props: MediationRecordProps) {
     super()
+
     if (props) {
       this.id = props.id ?? uuid()
       this.createdAt = props.createdAt ?? new Date()
       this.connectionId = props.connectionId
       this.recipientKeys = props.recipientKeys || []
       this.routingKeys = props.routingKeys || []
-      this.tags = props.tags
       this.state = props.state || MediationState.Init
       this.role = props.role
       this.endpoint = props.endpoint ?? undefined
@@ -56,6 +57,14 @@ export class MediationRecord extends BaseRecord implements MediationStorageProps
     }
   }
 
+  public getTags(): { state: MediationState; role: MediationRole; connectionId: string } {
+    return {
+      ...this._tags,
+      state: this.state,
+      role: this.role,
+      connectionId: this.connectionId,
+    }
+  }
   public assertState(expectedStates: MediationState | MediationState[]) {
     if (!Array.isArray(expectedStates)) {
       expectedStates = [expectedStates]

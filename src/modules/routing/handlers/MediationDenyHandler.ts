@@ -1,5 +1,5 @@
-import type { RecipientService } from '..'
 import type { Handler, HandlerInboundMessage } from '../../../agent/Handler'
+import type { RecipientService } from '../services'
 
 import { MediationDenyMessage } from '../messages'
 

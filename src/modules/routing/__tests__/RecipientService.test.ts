@@ -2,11 +2,12 @@ import type { Wallet } from '../../../wallet/Wallet'
 
 import { assert } from 'console'
 
-import { MediationRecord, MediationRole, MediationState } from '..'
 import { getBaseConfig } from '../../../__tests__/helpers'
 import { AgentConfig } from '../../../agent/AgentConfig'
 import { EventEmitter } from '../../../agent/EventEmitter'
 import { IndyWallet } from '../../../wallet/IndyWallet'
+import { MediationRole, MediationState } from '../models'
+import { MediationRecord } from '../repository'
 import { MediationRepository } from '../repository/MediationRepository'
 import { RecipientService } from '../services/RecipientService'
 
@@ -58,11 +59,11 @@ describe('Recipient', () => {
       expect(record.state).toBeDefined()
       assert(record.role, 'Expected MediationRecord to have an `role` property')
       expect(record.role).toBeDefined()
-      assert(record.tags, 'Expected MediationRecord to have an `tags` property')
-      expect(record.tags).toBeDefined()
-      assert(record.tags.state, 'Expected MediationRecord to have an `tags.state` property')
-      assert(record.tags.role, 'Expected MediationRecord to have an `tags.role` property')
-      assert(record.tags.connectionId, 'Expected MediationRecord to have an `tags.connectionId` property')
+      assert(record.getTags(), 'Expected MediationRecord to have an `tags` property')
+      expect(record.getTags()).toBeDefined()
+      assert(record.getTags().state, 'Expected MediationRecord to have an `tags.state` property')
+      assert(record.getTags().role, 'Expected MediationRecord to have an `tags.role` property')
+      assert(record.getTags().connectionId, 'Expected MediationRecord to have an `tags.connectionId` property')
       assert(record.connectionId, 'Expected MediationRecord to have an `connectionId` property')
       expect(record.connectionId).toBeDefined()
       assert(record.endpoint, 'Expected MediationRecord to have an `endpoint` property')
