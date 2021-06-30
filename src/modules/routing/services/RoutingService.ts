@@ -35,8 +35,8 @@ export const waitForEvent = async (
   let complete = false
   return new Promise<BaseEvent>(async (resolve, reject) => {
     setTimeout(() => {
-      if(!complete){
-        cleanup();
+      if (!complete) {
+        cleanup()
         reject(new Error(`Timed out waiting for event: ${eventName}`))
       }
     }, timeout)
