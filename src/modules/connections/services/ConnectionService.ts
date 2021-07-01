@@ -454,7 +454,7 @@ export class ConnectionService {
     return result
   }
 
-  public async keylistUpdatdAndAwait(
+  public async keylistUpdateAndAwait(
     mediationRecord: MediationRecord,
     verKey: string,
     timeout = 15000 // TODO: this should be a configurable value in agent config
