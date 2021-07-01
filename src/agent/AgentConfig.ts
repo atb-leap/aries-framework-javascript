@@ -74,7 +74,7 @@ export class AgentConfig {
     return DID_COMM_TRANSPORT_QUEUE
   }
 
-  public get myPort() {
+  public get Port() {
     return this.initConfig.port
   }
 

@@ -40,8 +40,6 @@ export const publicDidSeed = process.env.TEST_AGENT_PUBLIC_DID_SEED ?? '00000000
 export function getBaseConfig(name: string, extraConfig: Partial<InitConfig> = {}) {
   const config: InitConfig = {
     label: `Agent: ${name}`,
-    // host: 'http://localhost',
-    // port: '3001',
     walletConfig: { id: `Wallet: ${name}` },
     walletCredentials: { key: `Key: ${name}` },
     publicDidSeed,
@@ -275,10 +273,10 @@ export function makeInBoundTransporter() {
     })
   )
   app.set('json spaces', 2)
-  return new mockInBoundTransporter(app)
+  return new MockInBoundTransporter(app)
 }
 
-export class mockInBoundTransporter implements InboundTransporter {
+export class MockInBoundTransporter implements InboundTransporter {
   private app: Express
   public server?: Server
   public constructor(app: Express) {
@@ -294,8 +292,8 @@ export class mockInBoundTransporter implements InboundTransporter {
         } else {
           res.status(200).end()
         }
-      } catch (e) {
-        res.status(200).end()
+      } catch (e) { // TODO: support more error codes
+        res.status(500).send(JSON.stringify(e)).end()
       }
     })
     this.server = this.app.listen(agent.getPort())

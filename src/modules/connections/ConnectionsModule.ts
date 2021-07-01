@@ -10,7 +10,7 @@ import { MessageSender } from '../../agent/MessageSender'
 import { createOutboundMessage } from '../../agent/helpers'
 import { DID_COMM_TRANSPORT_QUEUE } from '../../constants'
 import { ReturnRouteTypes } from '../../decorators/transport/TransportDecorator'
-import { RecipientService } from '../routing/services/RecipientService'
+import { RecipientService as MediationRecipientService } from '../routing/services/RecipientService'
 
 import {
   ConnectionRequestHandler,
@@ -29,14 +29,14 @@ export class ConnectionsModule {
   private connectionService: ConnectionService
   private messageSender: MessageSender
   private trustPingService: TrustPingService
-  private recipientService: RecipientService
+  private recipientService: MediationRecipientService
 
   public constructor(
     dispatcher: Dispatcher,
     agentConfig: AgentConfig,
     connectionService: ConnectionService,
     trustPingService: TrustPingService,
-    recipientService: RecipientService,
+    recipientService: MediationRecipientService,
     messageSender: MessageSender
   ) {
     this.agentConfig = agentConfig

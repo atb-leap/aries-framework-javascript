@@ -1,5 +1,5 @@
 import type { InboundTransporter, MediationRecord } from '../../src'
-import type { mockInBoundTransporter } from '../../src/__tests__/helpers'
+import type { MockInBoundTransporter } from '../../src/__tests__/helpers'
 
 import { noop } from 'rxjs'
 import WebSocket from 'ws'
@@ -89,7 +89,7 @@ describe('mediator establishment', () => {
       noop()
     }
     try {
-      await (mediatorAgent.inboundTransporter as mockInBoundTransporter).stop()
+      await (mediatorAgent.inboundTransporter as MockInBoundTransporter).stop()
     } catch (e) {
       noop()
     }
@@ -182,10 +182,10 @@ describe('mediator establishment', () => {
       await (recipientAgent.inboundTransporter as TrustPingPollingInboundTransporter).stop()
     } catch (e) {}
     try {
-      await (mediatorAgent.inboundTransporter as mockInBoundTransporter).stop()
+      await (mediatorAgent.inboundTransporter as MockInBoundTransporter).stop()
     } catch (e) {}
     try {
-      await (tedAgent.inboundTransporter as mockInBoundTransporter).stop()
+      await (tedAgent.inboundTransporter as MockInBoundTransporter).stop()
     } catch (e) {}
     try {
       await recipientAgent.closeAndDeleteWallet()

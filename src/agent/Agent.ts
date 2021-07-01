@@ -160,7 +160,7 @@ export class Agent {
     return defaultMediator?.endpoint ?? this.agentConfig.getEndpoint()
   }
   public getPort() {
-    return this.agentConfig.myPort
+    return this.agentConfig.Port
   }
   public async receiveMessage(inboundPackedMessage: unknown, session?: TransportSession) {
     return await this.messageReceiver.receiveMessage(inboundPackedMessage, session)
@@ -168,7 +168,7 @@ export class Agent {
 
   public async closeAndDeleteWallet(): Promise<void> {
     await this.wallet.close()
-    return await this.wallet.delete()
+    await this.wallet.delete()
   }
 
   public get injectionContainer() {
