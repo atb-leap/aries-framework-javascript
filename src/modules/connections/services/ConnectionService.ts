@@ -450,7 +450,7 @@ export class ConnectionService {
       // TODO: check that recipient keys are in wallet
     }
     endpoint = endpoint ?? my_endpoint ?? this.config.getEndpoint()
-    const result = { mediationRecord, endpoint, routingKeys, did: did_data[0], verkey: did_data[1] }
+    const result = { mediationRecord, endpoint, routingKeys, did, verkey }
     return result
   }
 
