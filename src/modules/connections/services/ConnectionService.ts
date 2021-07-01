@@ -434,7 +434,7 @@ export class ConnectionService {
     return this.connectionRepository.getSingleByQuery({ threadId })
   }
 
-  private async getRouting(mediationRecord: MediationRecord | undefined, routingKeys: string[], my_endpoint?: string) {
+  private async getRouting(mediationRecord: MediationRecord | undefined, routingKeys: string[], myEndpoint?: string) {
     let endpoint
     if (mediationRecord) {
       routingKeys = [...routingKeys, ...mediationRecord.routingKeys]
