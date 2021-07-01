@@ -5,6 +5,7 @@ import type { EnvelopeKeys } from './EnvelopeService'
 import { inject, Lifecycle, scoped } from 'tsyringe'
 
 import { InjectionSymbols } from '../constants'
+import { ReturnRouteTypes } from '../decorators/transport/TransportDecorator'
 import { AriesFrameworkError } from '../error'
 import { Logger } from '../logger'
 
@@ -84,6 +85,9 @@ export class MessageSender {
   public async sendMessage(outboundMessage: OutboundMessage): Promise<void> {
     if (!this.outboundTransporter) {
       throw new AriesFrameworkError('Agent has no outbound transporter!')
+    }
+    if (!this.transportService.hasInboundEndpoint(outboundMessage.connection)) {
+      outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
     }
     const message = await this.packOutBoundMessage(outboundMessage)
     if (message) {

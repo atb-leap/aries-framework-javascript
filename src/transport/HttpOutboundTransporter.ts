@@ -52,7 +52,6 @@ export class HttpOutboundTransporter implements OutboundTransporter {
       `Sending outbound message to connection ${outboundPackage.connection.id}`,
       outboundPackage.payload
     )
-
     try {
       const response = fetch(endpoint, {
         method: 'POST',

@@ -15,7 +15,6 @@ import { MessageSender } from '../../../agent/MessageSender'
 import { createOutboundMessage } from '../../../agent/helpers'
 import { InjectionSymbols } from '../../../constants'
 import { signData, unpackAndVerifySignatureDecorator } from '../../../decorators/signature/SignatureDecoratorUtils'
-import { ReturnRouteTypes } from '../../../decorators/transport/TransportDecorator'
 import { AriesFrameworkError } from '../../../error'
 import { RoutingEventTypes } from '../../../modules/routing/RoutingEvents'
 import { waitForEvent } from '../../../modules/routing/services/RoutingService'
@@ -463,7 +462,6 @@ export class ConnectionService {
     const connection = await this.getById(mediationRecord.connectionId)
 
     const sendUpdateKeylist = async () => {
-      message.setReturnRouting(ReturnRouteTypes.all) // return message on request response
       const outboundMessage = createOutboundMessage(connection, message)
       await this.messageSender.sendMessage(outboundMessage)
     }

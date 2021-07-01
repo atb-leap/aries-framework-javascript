@@ -1,3 +1,4 @@
+import type { ReturnRouteTypes } from '../../decorators/transport/TransportDecorator'
 import type { TrustPingMessageOptions } from './messages'
 import type { ConnectionRecord } from './repository/ConnectionRecord'
 import type { Verkey } from 'indy-sdk'
@@ -8,8 +9,6 @@ import { AgentConfig } from '../../agent/AgentConfig'
 import { Dispatcher } from '../../agent/Dispatcher'
 import { MessageSender } from '../../agent/MessageSender'
 import { createOutboundMessage } from '../../agent/helpers'
-import { DID_COMM_TRANSPORT_QUEUE } from '../../constants'
-import { ReturnRouteTypes } from '../../decorators/transport/TransportDecorator'
 import { RecipientService as MediationRecipientService } from '../routing/services/RecipientService'
 
 import {
@@ -91,13 +90,7 @@ export class ConnectionsModule {
     // if auto accept is enabled (either on the record or the global agent config)
     // we directly send a connection request
     if (connection.autoAcceptConnection ?? this.agentConfig.autoAcceptConnections) {
-      if (!config?.mediatorId && this.agentConfig.getEndpoint() == DID_COMM_TRANSPORT_QUEUE) {
-        connection = await this.acceptInvitation(connection.id, ReturnRouteTypes.all)
-      } else {
-        //Todo: update to use send and wait for response flow
-        connection = await this.acceptInvitation(connection.id)
-        await this.connectionService.returnWhenIsConnected(connection.id)
-      }
+      connection = await this.acceptInvitation(connection.id)
     }
     return connection
   }
@@ -181,7 +174,6 @@ export class ConnectionsModule {
   public async preparePing(connection: ConnectionRecord, options?: TrustPingMessageOptions) {
     const message = new TrustPingMessage(options)
     const outboundMessage = createOutboundMessage(connection, message)
-    outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
     return outboundMessage
   }
 
