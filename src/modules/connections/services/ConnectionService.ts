@@ -441,7 +441,7 @@ export class ConnectionService {
       endpoint = mediationRecord.endpoint
     }
     // Create and store new key
-    const did_data = await this.wallet.createDid()
+    const [did, verkey] = await this.wallet.createDid()
     if (mediationRecord) {
       // new did has been created and mediator needs to be updated with the public key.
       mediationRecord = await this.keylistUpdatdAndAwait(mediationRecord, did_data[1])
