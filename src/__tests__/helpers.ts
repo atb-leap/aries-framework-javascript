@@ -292,7 +292,8 @@ export class MockInBoundTransporter implements InboundTransporter {
         } else {
           res.status(200).end()
         }
-      } catch (e) { // TODO: support more error codes
+      } catch (e) {
+        // TODO: support more error codes
         res.status(500).send(JSON.stringify(e)).end()
       }
     })
