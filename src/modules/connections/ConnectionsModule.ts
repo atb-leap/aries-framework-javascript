@@ -1,5 +1,3 @@
-import type { ReturnRouteTypes } from '../../decorators/transport/TransportDecorator'
-import type { TrustPingMessageOptions } from './messages'
 import type { ConnectionRecord } from './repository/ConnectionRecord'
 import type { Verkey } from 'indy-sdk'
 
@@ -18,7 +16,7 @@ import {
   TrustPingMessageHandler,
   TrustPingResponseMessageHandler,
 } from './handlers'
-import { ConnectionInvitationMessage, TrustPingMessage } from './messages'
+import { ConnectionInvitationMessage } from './messages'
 import { ConnectionService } from './services/ConnectionService'
 import { TrustPingService } from './services/TrustPingService'
 
@@ -123,12 +121,9 @@ export class ConnectionsModule {
    * @param connectionId the id of the connection for which to accept the invitation
    * @returns connection record
    */
-  public async acceptInvitation(connectionId: string, returnRouting?: ReturnRouteTypes): Promise<ConnectionRecord> {
+  public async acceptInvitation(connectionId: string): Promise<ConnectionRecord> {
     const { message, connectionRecord: connectionRecord } = await this.connectionService.createRequest(connectionId)
     const outbound = createOutboundMessage(connectionRecord, message)
-    if (returnRouting) {
-      outbound.payload.setReturnRouting(returnRouting)
-    }
     await this.messageSender.sendMessage(outbound)
 
     return connectionRecord
@@ -164,17 +159,6 @@ export class ConnectionsModule {
     await this.messageSender.sendMessage(outbound)
 
     return connectionRecord
-  }
-
-  public async pingMediator(connection: ConnectionRecord, options?: TrustPingMessageOptions): Promise<void> {
-    const outboundMessage = await this.preparePing(connection, options)
-    await this.messageSender.sendMessage(outboundMessage)
-  }
-
-  public async preparePing(connection: ConnectionRecord, options?: TrustPingMessageOptions) {
-    const message = new TrustPingMessage(options)
-    const outboundMessage = createOutboundMessage(connection, message)
-    return outboundMessage
   }
 
   public async returnWhenIsConnected(connectionId: string): Promise<ConnectionRecord> {

@@ -297,7 +297,7 @@ export class MockInBoundTransporter implements InboundTransporter {
         res.status(500).send(JSON.stringify(e)).end()
       }
     })
-    this.server = this.app.listen(agent.getPort())
+    this.server = this.app.listen(agent.port)
   }
   public async stop(): Promise<void> {
     this.server?.close()

@@ -2,7 +2,7 @@ import type { Logger } from '../logger'
 import type { MessageRepository } from '../storage/MessageRepository'
 import type { InboundTransporter } from '../transport/InboundTransporter'
 import type { OutboundTransporter } from '../transport/OutboundTransporter'
-import type { InitConfig, OutboundMessage } from '../types'
+import type { InitConfig } from '../types'
 import type { Wallet } from '../wallet/Wallet'
 import type { AgentMessageReceivedEvent } from './Events'
 import type { TransportSession } from './TransportService'
@@ -140,27 +140,18 @@ export class Agent {
     }
 
     await this.mediationRecipient.init(this.connections)
-    const defaultMediator = await this.mediationRecipient.getDefaultMediatorConnection()
-    if (defaultMediator) {
-      // TODO: update with batch pickup protocol.
-      this.connections.pingMediator(defaultMediator)
-    }
     this._isInitialized = true
   }
 
   public get publicDid() {
     return this.wallet.publicDid
   }
-  public async preparePackMessage(outboundMessage: OutboundMessage) {
-    return await this.messageSender.packOutBoundMessage(outboundMessage)
-  }
   public async getMediatorUrl() {
     const defaultMediator = await this.mediationRecipient.getDefaultMediator()
-
     return defaultMediator?.endpoint ?? this.agentConfig.getEndpoint()
   }
-  public getPort() {
-    return this.agentConfig.Port
+  public get port() {
+    return this.agentConfig.port
   }
   public async receiveMessage(inboundPackedMessage: unknown, session?: TransportSession) {
     return await this.messageReceiver.receiveMessage(inboundPackedMessage, session)
