@@ -433,14 +433,14 @@ export class ConnectionService {
     return this.connectionRepository.getSingleByQuery({ threadId })
   }
 
-  private async getRouting(mediationRecord: MediationRecord | undefined, routingKeys: string[], my_endpoint?: string) {
+  private async getRouting(mediationRecord: MediationRecord | undefined, routingKeys: string[], myEndpoint?: string) {
     let endpoint
     if (mediationRecord) {
       routingKeys = [...routingKeys, ...mediationRecord.routingKeys]
       endpoint = mediationRecord.endpoint
     }
     // Create and store new key
-    const did_data = await this.wallet.createDid()
+    const [did, verkey] = await this.wallet.createDid()
     if (mediationRecord) {
       // new did has been created and mediator needs to be updated with the public key.
       mediationRecord = await this.keylistUpdatdAndAwait(mediationRecord, did_data[1])
@@ -449,11 +449,11 @@ export class ConnectionService {
       // TODO: check that recipient keys are in wallet
     }
     endpoint = endpoint ?? my_endpoint ?? this.config.getEndpoint()
-    const result = { mediationRecord, endpoint, routingKeys, did: did_data[0], verkey: did_data[1] }
+    const result = { mediationRecord, endpoint, routingKeys, did, verkey }
     return result
   }
 
-  public async keylistUpdatdAndAwait(
+  public async keylistUpdateAndAwait(
     mediationRecord: MediationRecord,
     verKey: string,
     timeout = 15000 // TODO: this should be a configurable value in agent config
