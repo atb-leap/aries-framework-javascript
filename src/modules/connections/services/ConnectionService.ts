@@ -443,12 +443,12 @@ export class ConnectionService {
     const [did, verkey] = await this.wallet.createDid()
     if (mediationRecord) {
       // new did has been created and mediator needs to be updated with the public key.
-      mediationRecord = await this.keylistUpdatdAndAwait(mediationRecord, did_data[1])
+      mediationRecord = await this.keylistUpdateAndAwait(mediationRecord, did)
     } else {
       // TODO: register recipient keys for relay
       // TODO: check that recipient keys are in wallet
     }
-    endpoint = endpoint ?? my_endpoint ?? this.config.getEndpoint()
+    endpoint = endpoint ?? myEndpoint ?? this.config.getEndpoint()
     const result = { mediationRecord, endpoint, routingKeys, did, verkey }
     return result
   }
