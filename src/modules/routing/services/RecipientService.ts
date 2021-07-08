@@ -13,7 +13,7 @@ import { KeylistMessage } from '../messages/KeylistMessage'
 import { MediationRole, MediationState } from '../models'
 import { MediationRecord } from '../repository/MediationRecord'
 import { MediationRepository } from '../repository/MediationRepository'
-import { assertConnection } from '../services/RoutingService'
+import { assertConnection } from './RoutingService'
 
 @scoped(Lifecycle.ContainerScoped)
 export class RecipientService {
