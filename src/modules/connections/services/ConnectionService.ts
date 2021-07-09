@@ -51,7 +51,7 @@ export class ConnectionService {
     config: AgentConfig,
     connectionRepository: ConnectionRepository,
     eventEmitter: EventEmitter,
-    @inject(InjectionSymbols.RecipientService) mediationRecipientService: RecipientService
+    mediationRecipientService: RecipientService
   ) {
     this.wallet = wallet
     this.config = config

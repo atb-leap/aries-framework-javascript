@@ -87,7 +87,6 @@ export class Agent {
     // Resolve instances after everything is registered
     this.eventEmitter = this.container.resolve(EventEmitter)
     this.messageSender = this.container.resolve(MessageSender)
-    this.container.registerInstance(InjectionSymbols.MessageSender, this.messageSender)
     this.messageReceiver = this.container.resolve(MessageReceiver)
     this.wallet = this.container.resolve(InjectionSymbols.Wallet)
 
