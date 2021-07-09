@@ -21,7 +21,7 @@ export class MessageSender {
 
   public constructor(
     envelopeService: EnvelopeService,
-    @inject(InjectionSymbols.TransportService) transportService: TransportService,
+    transportService: TransportService,
     @inject(InjectionSymbols.Logger) logger: Logger
   ) {
     this.envelopeService = envelopeService

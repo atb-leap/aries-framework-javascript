@@ -5,6 +5,7 @@ import type { MediationStateChangedEvent, KeylistUpdatedEvent } from '../Routing
 import type { MediationGrantMessage, MediationDenyMessage, KeylistUpdateResponseMessage } from '../messages'
 import type { Verkey } from 'indy-sdk'
 
+import { firstValueFrom, ReplaySubject } from 'rxjs'
 import { filter, first, timeout } from 'rxjs/operators'
 import { inject, Lifecycle, scoped } from 'tsyringe'
 
@@ -23,8 +24,6 @@ import { KeylistUpdate, KeylistUpdateMessage } from '../messages/KeylistUpdatedM
 import { MediationRole, MediationState } from '../models'
 import { MediationRecord } from '../repository/MediationRecord'
 import { MediationRepository } from '../repository/MediationRepository'
-
-import { assertConnection } from './RoutingService'
 
 @scoped(Lifecycle.ContainerScoped)
 export class RecipientService {
@@ -75,10 +74,9 @@ export class RecipientService {
   }
 
   public async processMediationGrant(messageContext: InboundMessageContext<MediationGrantMessage>) {
-    const connection = assertConnection(
-      messageContext.connection,
-      'No connection associated with incoming mediation grant message'
-    )
+    // Assert ready connection
+    const connection = messageContext.assertReadyConnection()
+
     // Mediation record must already exists to be updated to granted status
     const mediationRecord = await this.findByConnectionId(connection.id)
     if (!mediationRecord) {
@@ -107,10 +105,9 @@ export class RecipientService {
   /* eslint-enable @typescript-eslint/no-unused-vars */
 
   public async processKeylistUpdateResults(messageContext: InboundMessageContext<KeylistUpdateResponseMessage>) {
-    const connection = assertConnection(
-      messageContext.connection,
-      'No connection associated with incoming mediation keylistUpdateResults message'
-    )
+    // Assert ready connection
+    const connection = messageContext.assertReadyConnection()
+
     const mediationRecord = await this.findByConnectionId(connection.id)
     if (!mediationRecord) {
       throw new Error(`mediation record for  ${connection.id} not found!`)
@@ -144,9 +141,10 @@ export class RecipientService {
 
     // Create observable for event
     const observable = this.eventEmitter.observable<KeylistUpdatedEvent>(RoutingEventTypes.RecipientKeylistUpdated)
+    const subject = new ReplaySubject<KeylistUpdatedEvent>(1)
 
     // Apply required filters to observable stream and create promise to subscribe to observable
-    const keylistUpdatePromise = observable
+    observable
       .pipe(
         // Only take event for current mediation record
         filter((event) => mediationRecord.id === event.payload.mediationRecord.id),
@@ -155,12 +153,12 @@ export class RecipientService {
         // Do not wait for longer than specified timeout
         timeout(timeoutMs)
       )
-      .toPromise()
+      .subscribe(subject)
+
     const outboundMessage = createOutboundMessage(connection, message)
     await this.messageSender.sendMessage(outboundMessage)
 
-    // Await the observable promise
-    const keylistUpdate = await keylistUpdatePromise
+    const keylistUpdate = await firstValueFrom(subject)
     return keylistUpdate.payload.mediationRecord
   }
 
@@ -205,10 +203,7 @@ export class RecipientService {
   }
 
   public async processMediationDeny(messageContext: InboundMessageContext<MediationDenyMessage>) {
-    const connection = assertConnection(
-      messageContext.connection,
-      'No connection associated with incoming mediation deny message'
-    )
+    const connection = messageContext.assertReadyConnection()
 
     // Mediation record already exists
     const mediationRecord = await this.findByConnectionId(connection.id)

@@ -3,6 +3,8 @@ import type { MediationStateChangedEvent } from './RoutingEvents'
 import type { MediationRecord } from './index'
 import type { Verkey } from 'indy-sdk'
 
+import { firstValueFrom, ReplaySubject } from 'rxjs'
+import { filter, first, timeout } from 'rxjs/operators'
 import { Lifecycle, scoped } from 'tsyringe'
 
 import { AgentConfig } from '../../agent/AgentConfig'
@@ -20,7 +22,6 @@ import { MediationGrantHandler } from './handlers/MediationGrantHandler'
 import { BatchPickupMessage } from './messages/BatchPickupMessage'
 import { MediationState } from './models/MediationState'
 import { RecipientService } from './services/RecipientService'
-import { assertConnection, waitForEvent } from './services/RoutingService'
 
 @scoped(Lifecycle.ContainerScoped)
 export class RecipientModule {
@@ -69,10 +70,8 @@ export class RecipientModule {
   }
 
   public async downloadMessages(mediatorConnection: ConnectionRecord) {
-    let connection = mediatorConnection ?? (await this.findDefaultMediatorConnection())
-    connection = assertConnection(connection, 'connection not found for default mediator')
     const batchPickupMessage = new BatchPickupMessage({ batchSize: 10 })
-    const outboundMessage = createOutboundMessage(connection, batchPickupMessage)
+    const outboundMessage = createOutboundMessage(mediatorConnection, batchPickupMessage)
     outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
     await this.messageSender.sendMessage(outboundMessage)
   }
@@ -124,35 +123,34 @@ export class RecipientModule {
     return null
   }
 
-  /**
-   * create mediation record and request.
-   * register listener for mediation grant, before sending request to remove race condition
-   * resolve record when mediator grants request. time out otherwise
-   * send request message to mediator
-   * return promise with listener
-   **/
-  public async requestAndAwaitGrant(connection: ConnectionRecord, timeout = 10000): Promise<MediationRecord> {
-    const { mediationRecord, message } = await this.recipientService.createRequest(connection)
+  public async requestAndAwaitGrant(connection: ConnectionRecord, timeoutMs = 10000): Promise<MediationRecord> {
+    const [mediationRecord, message] = await this.recipientService.createRequest(connection)
 
-    const sendMediationRequest = async () => {
-      message.setReturnRouting(ReturnRouteTypes.all) // return message on request response
-      const outboundMessage = createOutboundMessage(connection, message)
-      await this.messageSender.sendMessage(outboundMessage)
-    }
-    const condition = async (event: MediationStateChangedEvent) => {
-      const previousStateMatches = MediationState.Requested === event.payload.previousState
-      const mediationIdMatches = mediationRecord.id === event.payload.mediationRecord.id
-      const stateMatches = MediationState.Granted === event.payload.mediationRecord.state
-      return previousStateMatches && mediationIdMatches && stateMatches
-    }
-    const results = await waitForEvent(
-      sendMediationRequest,
-      RoutingEventTypes.MediationStateChanged,
-      condition,
-      timeout,
-      this.eventEmitter
-    )
-    return (results as MediationStateChangedEvent).payload.mediationRecord
+    // Create observable for event
+    const observable = this.eventEmitter.observable<MediationStateChangedEvent>(RoutingEventTypes.MediationStateChanged)
+    const subject = new ReplaySubject<MediationStateChangedEvent>(1)
+
+    // Apply required filters to observable stream subscribe to replay subject
+    observable
+      .pipe(
+        // Only take event for current mediation record
+        filter((event) => event.payload.mediationRecord.id === mediationRecord.id),
+        // Only take event for previous state requested, current state granted
+        filter((event) => event.payload.previousState === MediationState.Requested),
+        filter((event) => event.payload.mediationRecord.state === MediationState.Granted),
+        // Only wait for first event that matches the criteria
+        first(),
+        // Do not wait for longer than specified timeout
+        timeout(timeoutMs)
+      )
+      .subscribe(subject)
+
+    // Send mediation request message
+    const outboundMessage = createOutboundMessage(connection, message)
+    await this.messageSender.sendMessage(outboundMessage)
+
+    const event = await firstValueFrom(subject)
+    return event.payload.mediationRecord
   }
 
   // Register handlers for the several messages for the mediator.

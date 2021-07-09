@@ -29,7 +29,7 @@ import { MediationState } from '../models/MediationState'
 import { MediationRecord } from '../repository/MediationRecord'
 import { MediationRepository } from '../repository/MediationRepository'
 
-import { assertConnection } from './RoutingService'
+import { createRecord } from './RoutingService'
 
 export interface RoutingTable {
   [recipientKey: string]: ConnectionRecord | undefined
@@ -82,8 +82,10 @@ export class MediatorService {
   }
 
   public async processKeylistUpdateRequest(messageContext: InboundMessageContext<KeylistUpdateMessage>) {
+    // Assert Ready connection
+    const connection = messageContext.assertReadyConnection()
+
     const { message } = messageContext
-    const connection = assertConnection(messageContext.connection)
     const keylist: KeylistUpdated[] = []
 
     const mediationRecord = await this.findRecipientByConnectionId(connection.id)
@@ -173,8 +175,8 @@ export class MediatorService {
   }
 
   public async processMediationRequest(messageContext: InboundMessageContext<MediationRequestMessage>) {
-    // Assert connection
-    const connection = assertConnection(messageContext.connection)
+    // Assert ready connection
+    const connection = messageContext.assertReadyConnection()
 
     const mediationRecord = new MediationRecord({
       connectionId: connection.id,
