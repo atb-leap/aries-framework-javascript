@@ -7,8 +7,8 @@ import type { ConnectionRecord } from '../../connections/repository/ConnectionRe
 import type { MediationRecordProps } from '../repository/MediationRecord'
 import type { MediationRepository } from '../repository/MediationRepository'
 
-import { MediationRecord } from '../repository/MediationRecord'
 import { AriesFrameworkError } from '../../../error/AriesFrameworkError'
+import { MediationRecord } from '../repository/MediationRecord'
 
 /**
  * waitForEvent
@@ -89,7 +89,10 @@ export async function createRecord(
   return mediationRecord
 }
 
-export function assertConnection(record: ConnectionRecord | undefined, errormsg: string = "inbound connection is required"): ConnectionRecord {
+export function assertConnection(
+  record: ConnectionRecord | undefined,
+  errormsg = 'inbound connection is required'
+): ConnectionRecord {
   if (!record) throw new AriesFrameworkError(errormsg)
   record.assertReady()
   return record

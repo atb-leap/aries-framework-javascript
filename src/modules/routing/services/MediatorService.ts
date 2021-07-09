@@ -1,9 +1,9 @@
-import type { BaseMessage } from '../../../agent/BaseMessage'
 import type { HandlerInboundMessage } from '../../../agent/Handler'
 import type { InboundMessageContext } from '../../../agent/models/InboundMessageContext'
 import type { ConnectionRecord } from '../../connections'
 import type { MediationStateChangedEvent } from '../RoutingEvents'
 import type { ForwardHandler } from '../handlers'
+import type { KeylistUpdateMessage, MediationRequestMessage } from '../messages'
 import type { MediationRecord } from '../repository/MediationRecord'
 import type { Verkey } from 'indy-sdk'
 
@@ -14,18 +14,15 @@ import { EventEmitter } from '../../../agent/EventEmitter'
 import { MessageSender } from '../../../agent/MessageSender'
 import { createOutboundMessage } from '../../../agent/helpers'
 import { InjectionSymbols } from '../../../constants'
-import { AriesFrameworkError } from '../../../error'
 import { uuid } from '../../../utils/uuid'
 import { Wallet } from '../../../wallet/Wallet'
 import { ConnectionService } from '../../connections/services/ConnectionService'
 import { RoutingEventTypes } from '../RoutingEvents'
 import {
-  KeylistUpdateMessage,
   KeylistUpdateAction,
   KeylistUpdateResult,
   KeylistUpdated,
   MediationGrantMessage,
-  MediationRequestMessage,
   KeylistUpdateResponseMessage,
 } from '../messages'
 import { MediationRole } from '../models/MediationRole'

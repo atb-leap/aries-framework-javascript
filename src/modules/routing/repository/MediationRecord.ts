@@ -82,5 +82,4 @@ export class MediationRecord
       throw new AriesFrameworkError(`Mediation record has invalid role ${this.role}. Expected role ${expectedRole}.`)
     }
   }
-
 }
