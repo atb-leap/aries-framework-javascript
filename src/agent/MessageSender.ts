@@ -21,7 +21,7 @@ export class MessageSender {
 
   public constructor(
     envelopeService: EnvelopeService,
-    @inject(InjectionSymbols.TransportService)transportService: TransportService,
+    @inject(InjectionSymbols.TransportService) transportService: TransportService,
     @inject(InjectionSymbols.Logger) logger: Logger
   ) {
     this.envelopeService = envelopeService
@@ -86,7 +86,7 @@ export class MessageSender {
     if (!this.outboundTransporter) {
       throw new AriesFrameworkError('Agent has no outbound transporter!')
     }
-    if (!(this.transportService.hasInboundEndpoint(outboundMessage.connection))) {
+    if (!this.transportService.hasInboundEndpoint(outboundMessage.connection)) {
       outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
     }
     const message = await this.packOutBoundMessage(outboundMessage)

@@ -13,6 +13,7 @@ import { KeylistMessage } from '../messages/KeylistMessage'
 import { MediationRole, MediationState } from '../models'
 import { MediationRecord } from '../repository/MediationRecord'
 import { MediationRepository } from '../repository/MediationRepository'
+
 import { assertConnection } from './RoutingService'
 
 @scoped(Lifecycle.ContainerScoped)
@@ -227,7 +228,6 @@ export class RecipientService {
         throw new Error(`Mediation State for ${defaultMediator.id} is not granted!`)
       }
       return defaultMediator
-    }
     }
   }
 

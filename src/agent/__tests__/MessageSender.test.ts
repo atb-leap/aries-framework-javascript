@@ -12,7 +12,6 @@ import { EnvelopeService as EnvelopeServiceImpl } from '../EnvelopeService'
 import { MessageSender } from '../MessageSender'
 import { TransportService } from '../TransportService'
 import { createOutboundMessage } from '../helpers'
-import { DID_COMM_TRANSPORT_QUEUE } from '../../constants'
 
 jest.mock('../TransportService')
 jest.mock('../EnvelopeService')
