@@ -88,12 +88,3 @@ export async function createRecord(
   await mediatorRepository.save(mediationRecord)
   return mediationRecord
 }
-
-export function assertConnection(
-  record: ConnectionRecord | undefined,
-  errormsg = 'inbound connection is required'
-): ConnectionRecord {
-  if (!record) throw new AriesFrameworkError(errormsg)
-  record.assertReady()
-  return record
-}

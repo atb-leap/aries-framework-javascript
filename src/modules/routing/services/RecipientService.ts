@@ -22,8 +22,6 @@ import { MediationRole, MediationState } from '../models'
 import { MediationRecord } from '../repository/MediationRecord'
 import { MediationRepository } from '../repository/MediationRepository'
 
-import { assertConnection } from './RoutingService'
-
 @scoped(Lifecycle.ContainerScoped)
 export class RecipientService {
   private wallet: Wallet
@@ -76,10 +74,9 @@ export class RecipientService {
   }
 
   public async processMediationGrant(messageContext: InboundMessageContext<MediationGrantMessage>) {
-    const connection = assertConnection(
-      messageContext.connection,
-      'No connection associated with incoming mediation grant message'
-    )
+    // Assert ready connection
+    const connection = messageContext.assertReadyConnection()
+
     // Mediation record must already exists to be updated to granted status
     const mediationRecord = await this.findByConnectionId(connection.id)
     if (!mediationRecord) {
@@ -108,10 +105,9 @@ export class RecipientService {
   /* eslint-enable @typescript-eslint/no-unused-vars */
 
   public async processKeylistUpdateResults(messageContext: InboundMessageContext<KeylistUpdateResponseMessage>) {
-    const connection = assertConnection(
-      messageContext.connection,
-      'No connection associated with incoming mediation keylistUpdateResults message'
-    )
+    // Assert ready connection
+    const connection = messageContext.assertReadyConnection()
+
     const mediationRecord = await this.findByConnectionId(connection.id)
     if (!mediationRecord) {
       throw new Error(`mediation record for  ${connection.id} not found!`)
@@ -211,10 +207,7 @@ export class RecipientService {
   }
 
   public async processMediationDeny(messageContext: InboundMessageContext<MediationDenyMessage>) {
-    const connection = assertConnection(
-      messageContext.connection,
-      'No connection associated with incoming mediation deny message'
-    )
+    const connection = messageContext.assertReadyConnection()
 
     // Mediation record already exists
     const mediationRecord = await this.findByConnectionId(connection.id)

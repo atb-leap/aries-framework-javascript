@@ -21,7 +21,7 @@ import { MediationGrantHandler } from './handlers/MediationGrantHandler'
 import { BatchPickupMessage } from './messages/BatchPickupMessage'
 import { MediationState } from './models/MediationState'
 import { RecipientService } from './services/RecipientService'
-import { assertConnection, waitForEvent } from './services/RoutingService'
+import { waitForEvent } from './services/RoutingService'
 
 @scoped(Lifecycle.ContainerScoped)
 export class RecipientModule {
@@ -88,10 +88,8 @@ export class RecipientModule {
     return this.recipientService.discoverMediation()
   }
   public async downloadMessages(mediatorConnection: ConnectionRecord) {
-    let connection = mediatorConnection ?? (await this.getDefaultMediatorConnection())
-    connection = assertConnection(connection, 'connection not found for default mediator')
     const batchPickupMessage = new BatchPickupMessage({ batchSize: 10 })
-    const outboundMessage = createOutboundMessage(connection, batchPickupMessage)
+    const outboundMessage = createOutboundMessage(mediatorConnection, batchPickupMessage)
     outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
     await this.messageSender.sendMessage(outboundMessage)
   }
