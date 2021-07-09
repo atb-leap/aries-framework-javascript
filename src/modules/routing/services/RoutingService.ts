@@ -80,10 +80,6 @@ export async function createRecord(
     role,
     connectionId,
     recipientKeys,
-    tags: {
-      role,
-      connectionId,
-    },
   })
   await mediatorRepository.save(mediationRecord)
   return mediationRecord

@@ -199,9 +199,9 @@ export class ConnectionService {
       throw new AriesFrameworkError('Invalid message')
     }
 
-    connectionRecord.theirDid = message.connection.did
     connectionRecord.theirDidDoc = message.connection.didDoc
     connectionRecord.threadId = message.id
+    connectionRecord.theirDid = message.connection.did
 
     if (!connectionRecord.theirKey) {
       throw new AriesFrameworkError(`Connection with id ${connectionRecord.id} has no recipient keys.`)

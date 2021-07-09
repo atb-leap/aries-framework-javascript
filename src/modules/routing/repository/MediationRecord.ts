@@ -1,4 +1,3 @@
-import type { TagsBase } from '../../../storage/BaseRecord'
 import type { MediationRole } from '../models/MediationRole'
 import type { Verkey } from 'indy-sdk'
 
@@ -16,11 +15,13 @@ export interface MediationRecordProps {
   endpoint?: string
   recipientKeys?: Verkey[]
   routingKeys?: Verkey[]
-  default?: boolean
   tags?: CustomMediationTags
 }
 
-export type CustomMediationTags = TagsBase
+export type CustomMediationTags = {
+  default?: boolean
+}
+
 export type DefaultMediationTags = {
   role: MediationRole
   connectionId: string
@@ -37,7 +38,7 @@ export class MediationRecord
   public endpoint?: string
   public recipientKeys!: Verkey[]
   public routingKeys!: Verkey[]
-  public default = false
+
   public static readonly type = 'MediationRecord'
   public readonly type = MediationRecord.type
 
@@ -53,7 +54,6 @@ export class MediationRecord
       this.state = props.state || MediationState.Init
       this.role = props.role
       this.endpoint = props.endpoint ?? undefined
-      this.default = props.default || false
     }
   }
 
@@ -65,6 +65,7 @@ export class MediationRecord
       connectionId: this.connectionId,
     }
   }
+
   public assertState(expectedStates: MediationState | MediationState[]) {
     if (!Array.isArray(expectedStates)) {
       expectedStates = [expectedStates]

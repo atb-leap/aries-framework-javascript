@@ -1,5 +1,4 @@
 import type { ConnectionRecord } from '../connections'
-import type { ConnectionsModule } from '../connections/ConnectionsModule'
 import type { MediationStateChangedEvent } from './RoutingEvents'
 import type { MediationRecord } from './index'
 import type { Verkey } from 'indy-sdk'
@@ -47,46 +46,28 @@ export class RecipientModule {
     this.registerHandlers(dispatcher)
   }
 
-  public async init(connections: ConnectionsModule) {
-    this.recipientService.init()
-    if (this.agentConfig.mediatorConnectionsInvite) {
-      /* --------------------------------
-        | Connect to mediator through provided invitation
-        | and send mediation request and set as default mediator.
-        */
-      // Check if inviation was provided in config
-      // Assumption: processInvitation is a URL-encoded invitation
-      let connectionRecord = await connections.receiveInvitationFromUrl(this.agentConfig.mediatorConnectionsInvite, {
-        autoAcceptConnection: true,
-        alias: 'InitedMediator', // TODO come up with a better name for this
-      })
-      connectionRecord = await connections.returnWhenIsConnected(connectionRecord.id)
-      const mediationRecord = await this.requestAndAwaitGrant(connectionRecord, 60000) // TODO: put timeout as a config parameter
-      await this.recipientService.setDefaultMediator(mediationRecord)
-    }
+  public async initialize() {
+    const { defaultMediatorId, clearDefaultMediator } = this.agentConfig
+    // Set default mediator by id
     if (this.agentConfig.defaultMediatorId) {
-      /*
-        | Set the default mediator by ID
-        */
       const mediatorRecord = await this.recipientService.findById(this.agentConfig.defaultMediatorId)
       if (mediatorRecord) {
-        this.recipientService.setDefaultMediator(mediatorRecord)
+        await this.recipientService.setDefaultMediator(mediatorRecord)
       } else {
-        this.agentConfig.logger.error('Mediator record not found from config')
+        this.agentConfig.logger.error(`Mediator record with id ${defaultMediatorId} not found from config`)
         // TODO: Handle error properly - not found condition
       }
     }
-    if (this.agentConfig.clearDefaultMediator) {
-      /*
-        | Clear the stored default mediator
-        */
-      this.recipientService.clearDefaultMediator()
+    // Clear the stored default mediator
+    else if (clearDefaultMediator) {
+      await this.recipientService.clearDefaultMediator()
     }
   }
 
   public async discoverMediation() {
     return this.recipientService.discoverMediation()
   }
+
   public async downloadMessages(mediatorConnection: ConnectionRecord) {
     let connection = mediatorConnection ?? (await this.getDefaultMediatorConnection())
     connection = assertConnection(connection, 'connection not found for default mediator')
@@ -97,18 +78,18 @@ export class RecipientModule {
   }
 
   public async setDefaultMediator(mediatorRecord: MediationRecord) {
-    return await this.recipientService.setDefaultMediator(mediatorRecord)
+    return this.recipientService.setDefaultMediator(mediatorRecord)
   }
 
   public async requestMediation(connection: ConnectionRecord): Promise<MediationRecord> {
-    const [record, message] = await this.recipientService.createRequest(connection)
+    const { mediationRecord, message } = await this.recipientService.createRequest(connection)
     const outboundMessage = createOutboundMessage(connection, message)
     await this.messageSender.sendMessage(outboundMessage)
-    return record
+    return mediationRecord
   }
 
   public async notifyKeylistUpdate(connection: ConnectionRecord, verkey: Verkey) {
-    const message = await this.recipientService.createKeylistUpdateMessage(verkey)
+    const message = this.recipientService.createKeylistUpdateMessage(verkey)
     const outboundMessage = createOutboundMessage(connection, message)
     const response = await this.messageSender.sendMessage(outboundMessage)
     return response
@@ -129,29 +110,18 @@ export class RecipientModule {
     return await this.recipientService.getMediators()
   }
 
-  public async getMediatorConnections() {
-    const allMediators = await this.getMediators()
-    const mediatorConnectionIds = allMediators ? allMediators.map((mediator) => mediator.connectionId) : []
-    const allConnections = await this.connectionService.getAll()
-    return allConnections && mediatorConnectionIds
-      ? allConnections.filter((connection) => mediatorConnectionIds.includes(connection.id))
-      : []
+  public async findDefaultMediator(): Promise<MediationRecord | null> {
+    return this.recipientService.findDefaultMediator()
   }
 
-  public async getDefaultMediatorId() {
-    return await this.recipientService.getDefaultMediatorId()
-  }
+  public async findDefaultMediatorConnection(): Promise<ConnectionRecord | null> {
+    const mediatorRecord = await this.findDefaultMediator()
 
-  public async getDefaultMediator(): Promise<MediationRecord | undefined> {
-    return await this.recipientService.getDefaultMediator()
-  }
-
-  public async getDefaultMediatorConnection(): Promise<ConnectionRecord | undefined> {
-    const mediatorRecord = await this.getDefaultMediator()
     if (mediatorRecord) {
-      return await this.connectionService.getById(mediatorRecord.connectionId)
+      return this.connectionService.getById(mediatorRecord.connectionId)
     }
-    return undefined
+
+    return null
   }
 
   /**
@@ -162,7 +132,7 @@ export class RecipientModule {
    * return promise with listener
    **/
   public async requestAndAwaitGrant(connection: ConnectionRecord, timeout = 10000): Promise<MediationRecord> {
-    const [record, message] = await this.recipientService.createRequest(connection)
+    const { mediationRecord, message } = await this.recipientService.createRequest(connection)
 
     const sendMediationRequest = async () => {
       message.setReturnRouting(ReturnRouteTypes.all) // return message on request response
@@ -171,7 +141,7 @@ export class RecipientModule {
     }
     const condition = async (event: MediationStateChangedEvent) => {
       const previousStateMatches = MediationState.Requested === event.payload.previousState
-      const mediationIdMatches = record.id === event.payload.mediationRecord.id
+      const mediationIdMatches = mediationRecord.id === event.payload.mediationRecord.id
       const stateMatches = MediationState.Granted === event.payload.mediationRecord.state
       return previousStateMatches && mediationIdMatches && stateMatches
     }

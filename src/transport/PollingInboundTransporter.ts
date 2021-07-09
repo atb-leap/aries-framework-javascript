@@ -24,7 +24,7 @@ export class PollingInboundTransporter implements InboundTransporter {
   private async pollDownloadMessages(agent: Agent) {
     setInterval(async () => {
       if (!this.stop) {
-        const connection = await agent.mediationRecipient.getDefaultMediatorConnection()
+        const connection = await agent.mediationRecipient.findDefaultMediatorConnection()
         if (connection && connection.state == ConnectionState.Complete) {
           await agent.mediationRecipient.downloadMessages(connection)
         }
@@ -65,7 +65,7 @@ export class TrustPingPollingInboundTransporter implements InboundTransporter {
   private async pollDownloadMessages(recipient: Agent) {
     setInterval(async () => {
       if (this.run) {
-        const connection = await recipient.mediationRecipient.getDefaultMediatorConnection()
+        const connection = await recipient.mediationRecipient.findDefaultMediatorConnection()
         if (connection && connection.state == 'complete') {
           /*ping mediator uses a trust ping to trigger any stored messages to be sent back, one at a time.*/
           await this.pingMediator(connection)
