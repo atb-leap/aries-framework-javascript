@@ -216,16 +216,18 @@ export class RecipientService {
   }
 
   public async discoverMediation(mediatorId?: string | undefined) {
-    let mediationRecord: MediationRecord | null = null
-    const defaultMediator = await this.getDefaultMediator()
     if (mediatorId) {
-      mediationRecord = await this.findById(mediatorId)
-    } else if (defaultMediator) {
-      mediationRecord = defaultMediator
-      if (mediationRecord.state !== MediationState.Granted) {
-        throw new Error(`Mediation State for ${mediationRecord.id} is not granted!`)
-      }
+      const mediationRecord = await this.findById(mediatorId)
       return mediationRecord
+    }
+
+    const defaultMediator = await this.getDefaultMediator()
+    if (defaultMediator) {
+      if (defaultMediator.state !== MediationState.Granted) {
+        throw new Error(`Mediation State for ${defaultMediator.id} is not granted!`)
+      }
+      return defaultMediator
+    }
     }
   }
 
