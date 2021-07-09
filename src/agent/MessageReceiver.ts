@@ -6,7 +6,7 @@ import type { TransportSession } from './TransportService'
 import { Lifecycle, scoped } from 'tsyringe'
 
 import { AriesFrameworkError } from '../error'
-import { ConnectionService } from '../modules/connections'
+import { ConnectionService } from '../modules/connections/services/ConnectionService'
 import { RoutingMessageType as MessageType } from '../modules/routing'
 import { JsonTransformer } from '../utils/JsonTransformer'
 import { replaceLegacyDidSovPrefixOnMessage } from '../utils/messageType'

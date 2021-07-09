@@ -216,16 +216,18 @@ export class RecipientService {
     return this.defaultMediator
   }
 
-  public async discoverMediation(mediatorId?: string | undefined) {
+  public async discoverMediation(mediatorId?: string): Promise<MediationRecord | undefined> {
     if (mediatorId) {
       const mediationRecord = await this.findById(mediatorId)
-      return mediationRecord
+      if (mediationRecord) {
+        return mediationRecord
+      }
     }
 
     const defaultMediator = await this.getDefaultMediator()
     if (defaultMediator) {
       if (defaultMediator.state !== MediationState.Granted) {
-        throw new Error(`Mediation State for ${defaultMediator.id} is not granted!`)
+        throw new Error(`Mediation State for ${defaultMediator.id} is not granted, but is set as default mediator!`)
       }
       return defaultMediator
     }

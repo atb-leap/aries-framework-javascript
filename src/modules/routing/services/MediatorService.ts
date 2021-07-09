@@ -17,7 +17,7 @@ import { InjectionSymbols } from '../../../constants'
 import { AriesFrameworkError } from '../../../error'
 import { uuid } from '../../../utils/uuid'
 import { Wallet } from '../../../wallet/Wallet'
-import { ConnectionService } from '../../connections'
+import { ConnectionService } from '../../connections/services/ConnectionService'
 import { RoutingEventTypes } from '../RoutingEvents'
 import {
   KeylistUpdateMessage,

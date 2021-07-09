@@ -1,9 +1,6 @@
 import { getMockConnection } from '../../__tests__/helpers'
-import testLogger from '../../__tests__/logger'
 import { ConnectionInvitationMessage, ConnectionRole, DidCommService, DidDoc } from '../../modules/connections'
 import { TransportService } from '../TransportService'
-
-const logger = testLogger
 
 describe('TransportService', () => {
   describe('findServices', () => {
@@ -23,7 +20,7 @@ describe('TransportService', () => {
         service: [testDidCommService],
       })
 
-      transportService = new TransportService(logger)
+      transportService = new TransportService()
     })
 
     test(`returns empty array when there is no their DidDoc and role is ${ConnectionRole.Inviter}`, () => {
