@@ -44,19 +44,30 @@ export class ConnectionsModule {
     this.registerHandlers(dispatcher)
   }
 
-  public async createConnection(config?: {
+  public async createConnection(config: {
     autoAcceptConnection?: boolean
     alias?: string
     mediatorId?: string
+    routingKeys?: string[]
+    endpoint?: string
   }): Promise<{
     invitation: ConnectionInvitationMessage
     connectionRecord: ConnectionRecord
   }> {
     const mediationRecord = await this.recipientService.discoverMediation(config?.mediatorId)
+    const myRouting = await this.recipientService.getRouting(
+      //my routing
+      mediationRecord,
+      config.routingKeys ?? [],
+      config.endpoint
+    )
     const { connectionRecord: connectionRecord, message: invitation } = await this.connectionService.createInvitation({
       autoAcceptConnection: config?.autoAcceptConnection,
       alias: config?.alias,
-      mediator: mediationRecord,
+      endpoint: myRouting.endpoint,
+      did: myRouting.did,
+      verkey: myRouting.verkey,
+      routingKeys: myRouting.routingKeys,
     })
 
     return { connectionRecord, invitation }
@@ -73,17 +84,28 @@ export class ConnectionsModule {
    */
   public async receiveInvitation(
     invitation: ConnectionInvitationMessage,
-    config?: {
+    config: {
       autoAcceptConnection?: boolean
       alias?: string
       mediatorId?: string
+      routingKeys?: Verkey[]
+      endpoint?: string
     }
   ): Promise<ConnectionRecord> {
     const mediationRecord = await this.recipientService.discoverMediation(config?.mediatorId)
+    const myRouting = await this.recipientService.getRouting(
+      //my routing
+      mediationRecord,
+      config.routingKeys ?? [],
+      config.endpoint
+    )
     let connection = await this.connectionService.processInvitation(invitation, {
       autoAcceptConnection: config?.autoAcceptConnection,
       alias: config?.alias,
-      mediator: mediationRecord,
+      did: myRouting.did,
+      verkey: myRouting.verkey,
+      routingKeys: myRouting.routingKeys,
+      endpoint: myRouting.endpoint,
     })
     // if auto accept is enabled (either on the record or the global agent config)
     // we directly send a connection request
@@ -104,11 +126,11 @@ export class ConnectionsModule {
    */
   public async receiveInvitationFromUrl(
     invitationUrl: string,
-    config?: {
+    config: {
       autoAcceptConnection?: boolean
       alias?: string
       mediatorId?: string
-    }
+    } = {}
   ): Promise<ConnectionRecord> {
     const invitation = await ConnectionInvitationMessage.fromUrl(invitationUrl)
     return this.receiveInvitation(invitation, config)

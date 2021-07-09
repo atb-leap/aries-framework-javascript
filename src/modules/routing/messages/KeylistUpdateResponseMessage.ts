@@ -10,6 +10,7 @@ import { RoutingMessageType as MessageType } from './RoutingMessageType'
 export interface KeylistUpdateResponseMessageOptions {
   id?: string
   keylist: KeylistUpdated[]
+  threadId: string
 }
 
 /**
@@ -24,6 +25,9 @@ export class KeylistUpdateResponseMessage extends AgentMessage {
     if (options) {
       this.id = options.id || this.generateId()
       this.updated = options.keylist
+      this.setThread({
+        threadId: options.threadId,
+      })
     }
   }
 

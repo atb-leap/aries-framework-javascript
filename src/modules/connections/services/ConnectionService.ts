@@ -1,6 +1,5 @@
 import type { AgentMessage } from '../../../agent/AgentMessage'
 import type { InboundMessageContext } from '../../../agent/models/InboundMessageContext'
-import type { MediationRecord } from '../../../modules/routing'
 import type { AckMessage } from '../../common'
 import type { ConnectionStateChangedEvent } from '../ConnectionEvents'
 import type { CustomConnectionTags } from '../repository/ConnectionRecord'
@@ -16,7 +15,6 @@ import { signData, unpackAndVerifySignatureDecorator } from '../../../decorators
 import { AriesFrameworkError } from '../../../error'
 import { JsonTransformer } from '../../../utils/JsonTransformer'
 import { Wallet } from '../../../wallet/Wallet'
-import { RecipientService } from '../../routing/services/RecipientService'
 import { ConnectionEventTypes } from '../ConnectionEvents'
 import {
   ConnectionInvitationMessage,
@@ -44,20 +42,17 @@ export class ConnectionService {
   private config: AgentConfig
   private connectionRepository: ConnectionRepository
   private eventEmitter: EventEmitter
-  private mediationRecipientService: RecipientService
 
   public constructor(
     @inject(InjectionSymbols.Wallet) wallet: Wallet,
     config: AgentConfig,
     connectionRepository: ConnectionRepository,
-    eventEmitter: EventEmitter,
-    mediationRecipientService: RecipientService
+    eventEmitter: EventEmitter
   ) {
     this.wallet = wallet
     this.config = config
     this.connectionRepository = connectionRepository
     this.eventEmitter = eventEmitter
-    this.mediationRecipientService = mediationRecipientService
   }
 
   /**
@@ -66,21 +61,23 @@ export class ConnectionService {
    * @param config config for creation of connection and invitation
    * @returns new connection record
    */
-  public async createInvitation(config?: {
+  public async createInvitation(config: {
     autoAcceptConnection?: boolean
     alias?: string
-    mediator?: MediationRecord
-    routingKeys?: string[]
-    endpoint?: string
+    endpoint: string
+    did: Did
+    verkey: string
+    routingKeys: string[]
   }): Promise<ConnectionProtocolMsgReturnType<ConnectionInvitationMessage>> {
     // TODO: public did, multi use
     const connectionRecord = await this.createConnection({
       role: ConnectionRole.Inviter,
       state: ConnectionState.Invited,
       alias: config?.alias,
-      mediator: config?.mediator,
-      routingKeys: config?.routingKeys,
-      endpoint: config?.endpoint,
+      endpoint: config.endpoint,
+      did: config.did,
+      verkey: config.verkey,
+      routingKeys: config.routingKeys,
       autoAcceptConnection: config?.autoAcceptConnection,
     })
 
@@ -119,10 +116,13 @@ export class ConnectionService {
    */
   public async processInvitation(
     invitation: ConnectionInvitationMessage,
-    config?: {
+    config: {
       autoAcceptConnection?: boolean
       alias?: string
-      mediator?: MediationRecord
+      endpoint: string
+      verkey: string
+      did: Did
+      routingKeys: string[]
     }
   ): Promise<ConnectionRecord> {
     const connectionRecord = await this.createConnection({
@@ -130,7 +130,10 @@ export class ConnectionService {
       state: ConnectionState.Invited,
       alias: config?.alias,
       autoAcceptConnection: config?.autoAcceptConnection,
-      mediator: config?.mediator,
+      endpoint: config?.endpoint,
+      did: config?.did,
+      verkey: config?.verkey,
+      routingKeys: config.routingKeys,
       invitation,
       tags: {
         invitationKey: invitation.recipientKeys && invitation.recipientKeys[0],
@@ -199,9 +202,9 @@ export class ConnectionService {
       throw new AriesFrameworkError('Invalid message')
     }
 
-    connectionRecord.theirDid = message.connection.did
     connectionRecord.theirDidDoc = message.connection.didDoc
     connectionRecord.threadId = message.id
+    connectionRecord.theirDid = message.connection.did
 
     if (!connectionRecord.theirKey) {
       throw new AriesFrameworkError(`Connection with id ${connectionRecord.id} has no recipient keys.`)
@@ -432,24 +435,19 @@ export class ConnectionService {
   private async createConnection(options: {
     role: ConnectionRole
     state: ConnectionState
-    endpoint?: string
+    endpoint: string
     invitation?: ConnectionInvitationMessage
     alias?: string
-    mediator?: MediationRecord
-    routingKeys?: string[]
+    did: Did
+    verkey: string
+    routingKeys: string[]
     autoAcceptConnection?: boolean
     tags?: CustomConnectionTags
   }): Promise<ConnectionRecord> {
-    const myRouting = await this.mediationRecipientService.getRouting(
-      //my routing
-      options.mediator,
-      options.routingKeys ?? [],
-      options.endpoint
-    )
-    const endpoint: string = myRouting.endpoint
-    const did: Did = myRouting.did
-    const verkey: Verkey = myRouting.verkey || ''
-    const routingKeys: Verkey[] = myRouting.routingKeys
+    const endpoint: string = options.endpoint
+    const did: Did = options.did
+    const verkey: Verkey = options.verkey
+    const routingKeys: Verkey[] = options.routingKeys
 
     const publicKey = new Ed25119Sig2018({
       // TODO: shouldn't this name be ED25519

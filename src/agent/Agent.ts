@@ -130,7 +130,7 @@ export class Agent {
   public async init() {
     await this.wallet.init()
 
-    const { publicDidSeed } = this.agentConfig
+    const { publicDidSeed, mediatorConnectionsInvite } = this.agentConfig
     if (publicDidSeed) {
       // If an agent has publicDid it will be used as routing key.
       await this.wallet.initPublicDid({ seed: publicDidSeed })
@@ -140,20 +140,34 @@ export class Agent {
       await this.inboundTransporter.start(this)
     }
 
-    await this.mediationRecipient.init(this.connections)
+    // Connect to mediator through provided invitation if provided in config
+    // Also requests mediation ans sets as default mediator
+    // Because this requires the connections module, we do this in the agent constructor
+    if (mediatorConnectionsInvite) {
+      // Assumption: processInvitation is a URL-encoded invitation
+      let connectionRecord = await this.connections.receiveInvitationFromUrl(mediatorConnectionsInvite, {
+        autoAcceptConnection: true,
+      })
+
+      // TODO: add timeout to returnWhenIsConnected
+      connectionRecord = await this.connections.returnWhenIsConnected(connectionRecord.id)
+      const mediationRecord = await this.mediationRecipient.requestAndAwaitGrant(connectionRecord, 60000) // TODO: put timeout as a config parameter
+      await this.mediationRecipient.setDefaultMediator(mediationRecord)
+    }
+
+    await this.mediationRecipient.initialize()
+
     this._isInitialized = true
   }
 
   public get publicDid() {
     return this.wallet.publicDid
   }
-  public async getMediatorUrl() {
-    const defaultMediator = await this.mediationRecipient.getDefaultMediator()
-    return defaultMediator?.endpoint ?? this.agentConfig.getEndpoint()
-  }
+
   public get port() {
     return this.agentConfig.port
   }
+
   public async receiveMessage(inboundPackedMessage: unknown, session?: TransportSession) {
     return await this.messageReceiver.receiveMessage(inboundPackedMessage, session)
   }

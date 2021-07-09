@@ -29,7 +29,17 @@ export class IndyStorageService<T extends BaseRecord> implements StorageService<
     for (const [key, value] of Object.entries(tags)) {
       // If the value is a boolean string ('1' or '0')
       // use the boolean val
-      if (value === '1' || value === '0') {
+      if (value === '1' && value?.includes(':')) {
+        const [tagName, tagValue] = value.split(':')
+
+        const transformedValue = transformedTags[tagName]
+
+        if (Array.isArray(transformedValue)) {
+          transformedTags[tagName] = [...transformedValue, tagValue]
+        } else {
+          transformedTags[tagName] = [tagValue]
+        }
+      } else if (value === '1' || value === '0') {
         transformedTags[key] = value === '1'
       }
       // Otherwise just use the value
@@ -49,6 +59,14 @@ export class IndyStorageService<T extends BaseRecord> implements StorageService<
       // '1' or '0' syntax
       if (isBoolean(value)) {
         transformedTags[key] = value ? '1' : '0'
+      }
+      // If the value is an array we create a tag for each array
+      // item ("tagName:arrayItem" = "1")
+      else if (Array.isArray(value)) {
+        value.forEach((item) => {
+          const tagName = `${key}:${item}`
+          transformedTags[tagName] = '1'
+        })
       }
       // Otherwise just use the value
       else {
