@@ -108,7 +108,7 @@ export class RecipientModule {
   }
 
   public async notifyKeylistUpdate(connection: ConnectionRecord, verkey: Verkey) {
-    const message = await this.connectionService.createKeylistUpdateMessage(verkey)
+    const message = await this.recipientService.createKeylistUpdateMessage(verkey)
     const outboundMessage = createOutboundMessage(connection, message)
     const response = await this.messageSender.sendMessage(outboundMessage)
     return response
@@ -130,11 +130,11 @@ export class RecipientModule {
   }
 
   public async getMediatorConnections() {
-    const all_mediators = await this.getMediators()
-    const mediators_connection_ids = all_mediators ? all_mediators.map((mediator) => mediator.connectionId) : []
-    const all_connections = await this.connectionService.getAll()
-    return all_connections && mediators_connection_ids
-      ? all_connections.filter((connection) => mediators_connection_ids.includes(connection.id))
+    const allMediators = await this.getMediators()
+    const mediatorConnectionIds = allMediators ? allMediators.map((mediator) => mediator.connectionId) : []
+    const allConnections = await this.connectionService.getAll()
+    return allConnections && mediatorConnectionIds
+      ? allConnections.filter((connection) => mediatorConnectionIds.includes(connection.id))
       : []
   }
 

@@ -1,4 +1,5 @@
 import type { Logger } from '../logger'
+import type { CredentialsModule } from '../modules/credentials/CredentialsModule'
 import type { MessageRepository } from '../storage/MessageRepository'
 import type { InboundTransporter } from '../transport/InboundTransporter'
 import type { OutboundTransporter } from '../transport/OutboundTransporter'
@@ -15,7 +16,6 @@ import { container as baseContainer } from 'tsyringe'
 import { InjectionSymbols } from '../constants'
 import { BasicMessagesModule } from '../modules/basic-messages/BasicMessagesModule'
 import { ConnectionsModule } from '../modules/connections/ConnectionsModule'
-import { CredentialsModule } from '../modules/credentials/CredentialsModule'
 import { LedgerModule } from '../modules/ledger/LedgerModule'
 import { ProofsModule } from '../modules/proofs/ProofsModule'
 import { MediatorModule } from '../modules/routing/MediatorModule'
@@ -87,12 +87,12 @@ export class Agent {
     // Resolve instances after everything is registered
     this.eventEmitter = this.container.resolve(EventEmitter)
     this.messageSender = this.container.resolve(MessageSender)
+    this.container.registerInstance(InjectionSymbols.MessageSender, this.messageSender)
     this.messageReceiver = this.container.resolve(MessageReceiver)
     this.wallet = this.container.resolve(InjectionSymbols.Wallet)
 
     // We set the modules in the constructor because that allows to set them as read-only
     this.connections = this.container.resolve(ConnectionsModule)
-    this.credentials = this.container.resolve(CredentialsModule)
     this.proofs = this.container.resolve(ProofsModule)
     this.mediator = this.container.resolve(MediatorModule)
     this.mediationRecipient = this.container.resolve(RecipientModule)

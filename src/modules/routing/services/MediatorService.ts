@@ -32,7 +32,7 @@ import { MediationRole } from '../models/MediationRole'
 import { MediationState } from '../models/MediationState'
 import { MediationRepository } from '../repository/MediationRepository'
 
-import { createRecord } from './RoutingService'
+import { assertConnection, createRecord } from './RoutingService'
 
 export interface RoutingTable {
   [recipientKey: string]: ConnectionRecord | undefined
@@ -65,12 +65,6 @@ export class MediatorService {
     this.connectionService = connectionService
   }
 
-  private _assertConnection(connection: ConnectionRecord | undefined, msgType: BaseMessage): ConnectionRecord {
-    if (!connection) throw new AriesFrameworkError(`inbound connection is required for ${msgType.constructor.name}!`)
-    connection.assertReady()
-    return connection
-  }
-
   public async processForwardMessage(messageContext: HandlerInboundMessage<ForwardHandler>) {
     const { message, recipientVerkey } = messageContext
 
@@ -92,24 +86,24 @@ export class MediatorService {
 
   public async processKeylistUpdateRequest(messageContext: InboundMessageContext<KeylistUpdateMessage>) {
     const { message } = messageContext
-    const connection = this._assertConnection(messageContext.connection, KeylistUpdateMessage)
+    const connection = assertConnection(messageContext.connection)
     const keylist: KeylistUpdated[] = []
     const mediationRecord = await this.findRecipientByConnectionId(connection.id)
     if (!mediationRecord) {
       throw new Error(`mediation record for  ${connection.id} not found!`)
     }
     for (const update of message.updates) {
-      const update_ = new KeylistUpdated({
+      const updated = new KeylistUpdated({
         action: update.action,
         recipientKey: update.recipientKey,
         result: KeylistUpdateResult.NoChange,
       })
       if (update.action === KeylistUpdateAction.add) {
-        update_.result = await this.saveRoute(update.recipientKey, mediationRecord)
-        keylist.push(update_)
+        updated.result = await this.saveRoute(update.recipientKey, mediationRecord)
+        keylist.push(updated)
       } else if (update.action === KeylistUpdateAction.remove) {
-        update_.result = await this.removeRoute(update.recipientKey, mediationRecord)
-        keylist.push(update_)
+        updated.result = await this.removeRoute(update.recipientKey, mediationRecord)
+        keylist.push(updated)
       }
     }
     // emit event to send message that notifies recipient
@@ -160,6 +154,7 @@ export class MediatorService {
       const records = await this.mediationRepository.findByQuery({ connectionId })
       return records[0]
     } catch (error) {
+      this.agentConfig.logger.warn(`Could not find record for connection: ${connectionId}`)
       return null
     }
   }
@@ -189,7 +184,7 @@ export class MediatorService {
 
   public async processMediationRequest(messageContext: InboundMessageContext<MediationRequestMessage>) {
     // Assert connection
-    const connection = this._assertConnection(messageContext.connection, MediationRequestMessage)
+    const connection = assertConnection(messageContext.connection)
 
     const mediationRecord = await createRecord(
       {

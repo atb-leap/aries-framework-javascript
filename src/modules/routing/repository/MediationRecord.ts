@@ -83,11 +83,4 @@ export class MediationRecord
     }
   }
 
-  public assertConnection(currentConnectionId: string) {
-    if (this.connectionId !== currentConnectionId) {
-      throw new AriesFrameworkError(
-        `Proof record is associated with connection '${this.connectionId}'. Current connection is '${currentConnectionId}'`
-      )
-    }
-  }
 }

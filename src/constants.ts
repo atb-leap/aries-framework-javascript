@@ -9,6 +9,8 @@ export const InjectionSymbols = {
   InboundTransporter: Symbol('InboundTransporter'),
   OutboundTransporter: Symbol('OutboundTransporter'),
   TransportService: Symbol('TransportService'),
+  RecipientService: Symbol('RecipientService'),
+  ConnectionService: Symbol('ConnectionService'),
 }
 
 export const DID_COMM_TRANSPORT_QUEUE = 'didcomm:transport/queue'

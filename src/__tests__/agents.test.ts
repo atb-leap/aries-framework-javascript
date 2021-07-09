@@ -20,7 +20,7 @@ describe('agents', () => {
     await bobAgent.closeAndDeleteWallet()
   })
 
-  test('make a connection between agents and send a message over the connection', async () => {
+  test('make a connection between agents', async () => {
     const aliceMessages = new Subject()
     const bobMessages = new Subject()
 
@@ -42,7 +42,9 @@ describe('agents', () => {
 
     expect(aliceConnection).toBeConnectedWith(bobConnection)
     expect(bobConnection).toBeConnectedWith(aliceConnection)
+  })
 
+  test('send a message to connection', async () => {
     const message = 'hello, world'
     await aliceAgent.basicMessages.sendMessage(aliceConnection, message)
 

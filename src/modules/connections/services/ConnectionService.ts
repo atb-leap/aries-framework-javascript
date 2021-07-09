@@ -1,6 +1,6 @@
 import type { AgentMessage } from '../../../agent/AgentMessage'
 import type { InboundMessageContext } from '../../../agent/models/InboundMessageContext'
-import type { KeylistUpdatedEvent, MediationRecord } from '../../../modules/routing'
+import type { MediationRecord } from '../../../modules/routing'
 import type { AckMessage } from '../../common'
 import type { ConnectionStateChangedEvent } from '../ConnectionEvents'
 import type { CustomConnectionTags } from '../repository/ConnectionRecord'
@@ -11,16 +11,12 @@ import { inject, scoped, Lifecycle } from 'tsyringe'
 
 import { AgentConfig } from '../../../agent/AgentConfig'
 import { EventEmitter } from '../../../agent/EventEmitter'
-import { MessageSender } from '../../../agent/MessageSender'
-import { createOutboundMessage } from '../../../agent/helpers'
 import { InjectionSymbols } from '../../../constants'
 import { signData, unpackAndVerifySignatureDecorator } from '../../../decorators/signature/SignatureDecoratorUtils'
 import { AriesFrameworkError } from '../../../error'
-import { RoutingEventTypes } from '../../../modules/routing/RoutingEvents'
-import { waitForEvent } from '../../../modules/routing/services/RoutingService'
 import { JsonTransformer } from '../../../utils/JsonTransformer'
 import { Wallet } from '../../../wallet/Wallet'
-import { KeylistUpdate, KeylistUpdateAction, KeylistUpdateMessage } from '../../routing/messages/KeylistUpdatedMessage'
+import { RecipientService } from '../../routing/services/RecipientService'
 import { ConnectionEventTypes } from '../ConnectionEvents'
 import {
   ConnectionInvitationMessage,
@@ -48,20 +44,20 @@ export class ConnectionService {
   private config: AgentConfig
   private connectionRepository: ConnectionRepository
   private eventEmitter: EventEmitter
-  private messageSender: MessageSender
+  private mediationRecipientService: RecipientService
 
   public constructor(
     @inject(InjectionSymbols.Wallet) wallet: Wallet,
     config: AgentConfig,
     connectionRepository: ConnectionRepository,
     eventEmitter: EventEmitter,
-    messageSender: MessageSender
+    @inject(InjectionSymbols.RecipientService) mediationRecipientService: RecipientService
   ) {
     this.wallet = wallet
     this.config = config
     this.connectionRepository = connectionRepository
     this.eventEmitter = eventEmitter
-    this.messageSender = messageSender
+    this.mediationRecipientService = mediationRecipientService
   }
 
   /**
@@ -433,63 +429,6 @@ export class ConnectionService {
     return this.connectionRepository.getSingleByQuery({ threadId })
   }
 
-  private async getRouting(mediationRecord: MediationRecord | undefined, routingKeys: string[], myEndpoint?: string) {
-    let endpoint
-    if (mediationRecord) {
-      routingKeys = [...routingKeys, ...mediationRecord.routingKeys]
-      endpoint = mediationRecord.endpoint
-    }
-    // Create and store new key
-    const [did, verkey] = await this.wallet.createDid()
-    if (mediationRecord) {
-      // new did has been created and mediator needs to be updated with the public key.
-      mediationRecord = await this.keylistUpdateAndAwait(mediationRecord, did)
-    } else {
-      // TODO: register recipient keys for relay
-      // TODO: check that recipient keys are in wallet
-    }
-    endpoint = endpoint ?? myEndpoint ?? this.config.getEndpoint()
-    const result = { mediationRecord, endpoint, routingKeys, did, verkey }
-    return result
-  }
-
-  public async keylistUpdateAndAwait(
-    mediationRecord: MediationRecord,
-    verKey: string,
-    timeout = 15000 // TODO: this should be a configurable value in agent config
-  ): Promise<MediationRecord> {
-    const message = this.createKeylistUpdateMessage(verKey)
-    const connection = await this.getById(mediationRecord.connectionId)
-
-    const sendUpdateKeylist = async () => {
-      const outboundMessage = createOutboundMessage(connection, message)
-      await this.messageSender.sendMessage(outboundMessage)
-    }
-    const condition = async (event: KeylistUpdatedEvent) => {
-      return mediationRecord.id === event.payload.mediationRecord.id
-    }
-    const results = await waitForEvent(
-      sendUpdateKeylist,
-      RoutingEventTypes.RecipientKeylistUpdated,
-      condition,
-      timeout,
-      this.eventEmitter
-    )
-    return (results as KeylistUpdatedEvent).payload.mediationRecord
-  }
-
-  public createKeylistUpdateMessage(verkey: Verkey): KeylistUpdateMessage {
-    const keylistUpdateMessage = new KeylistUpdateMessage({
-      updates: [
-        new KeylistUpdate({
-          action: KeylistUpdateAction.add,
-          recipientKey: verkey,
-        }),
-      ],
-    })
-    return keylistUpdateMessage
-  }
-
   private async createConnection(options: {
     role: ConnectionRole
     state: ConnectionState
@@ -501,7 +440,7 @@ export class ConnectionService {
     autoAcceptConnection?: boolean
     tags?: CustomConnectionTags
   }): Promise<ConnectionRecord> {
-    const myRouting = await this.getRouting(
+    const myRouting = await this.mediationRecipientService.getRouting(
       //my routing
       options.mediator,
       options.routingKeys ?? [],
