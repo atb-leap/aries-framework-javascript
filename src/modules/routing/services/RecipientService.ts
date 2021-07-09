@@ -4,6 +4,7 @@ import type { MediationStateChangedEvent, KeylistUpdatedEvent } from '../Routing
 import type { MediationGrantMessage, MediationDenyMessage, KeylistUpdateResponseMessage } from '../messages'
 import type { Verkey } from 'indy-sdk'
 
+import { firstValueFrom, ReplaySubject } from 'rxjs'
 import { filter, first, timeout } from 'rxjs/operators'
 import { inject, Lifecycle, scoped } from 'tsyringe'
 
@@ -141,9 +142,10 @@ export class RecipientService {
 
     // Create observable for event
     const observable = this.eventEmitter.observable<KeylistUpdatedEvent>(RoutingEventTypes.RecipientKeylistUpdated)
+    const subject = new ReplaySubject<KeylistUpdatedEvent>(1)
 
     // Apply required filters to observable stream and create promise to subscribe to observable
-    const keylistUpdatePromise = observable
+    observable
       .pipe(
         // Only take event for current mediation record
         filter((event) => mediationRecord.id === event.payload.mediationRecord.id),
@@ -152,12 +154,12 @@ export class RecipientService {
         // Do not wait for longer than specified timeout
         timeout(timeoutMs)
       )
-      .toPromise()
+      .subscribe(subject)
+
     const outboundMessage = createOutboundMessage(connection, message)
     await this.messageSender.sendMessage(outboundMessage)
 
-    // Await the observable promise
-    const keylistUpdate = await keylistUpdatePromise
+    const keylistUpdate = await firstValueFrom(subject)
     return keylistUpdate.payload.mediationRecord
   }
 
