@@ -8,9 +8,10 @@ import { AgentMessage } from '../../../agent/AgentMessage'
 import { RoutingMessageType as MessageType } from './RoutingMessageType'
 
 export interface MediationGrantMessageOptions {
-  id: string
+  id?: string
   endpoint: string
   routingKeys: Verkey[]
+  threadId: string
 }
 
 /**
@@ -24,9 +25,12 @@ export class MediationGrantMessage extends AgentMessage {
     super()
 
     if (options) {
-      this.id = options.id
+      this.id = options.id ?? this.generateId()
       this.endpoint = options.endpoint
       this.routingKeys = options.routingKeys
+      this.setThread({
+        threadId: options.threadId,
+      })
     }
   }
 

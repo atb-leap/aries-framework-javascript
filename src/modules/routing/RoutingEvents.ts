@@ -14,7 +14,7 @@ export interface MediationStateChangedEvent extends BaseEvent {
   type: typeof RoutingEventTypes.MediationStateChanged
   payload: {
     mediationRecord: MediationRecord
-    previousState: MediationState
+    previousState: MediationState | null
   }
 }
 

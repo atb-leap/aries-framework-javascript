@@ -24,7 +24,7 @@ export class WsInboundTransporter implements InboundTransporter {
   }
   public async start() {
     /** nothing to see here*/
-    const defaultMediator = await this.agent.mediationRecipient.getDefaultMediatorConnection()
+    const defaultMediator = await this.agent.mediationRecipient.findDefaultMediatorConnection()
     if (defaultMediator) {
       // TODO: update with batch pickup protocol.
       this.trustPingSocket(defaultMediator)
@@ -60,9 +60,9 @@ export class WsInboundTransporter implements InboundTransporter {
     }
     socket.onopen = async () => {
       this.logger.trace('Socket has been opened')
-      const mediator = await this.agent.mediationRecipient.getDefaultMediatorConnection()
-      this.logger.debug('Mediator connection record being used:', mediator)
+      const mediator = await this.agent.mediationRecipient.findDefaultMediatorConnection()
       if (mediator) {
+        this.logger.debug('Mediator connection record being used:', mediator)
         const ping = await this.preparePing(mediator, { responseRequested: false })
         this.logger.trace('Sending ping to socket with mediator connection encryption:', ping)
         const packed = await this.messageSender.packOutBoundMessage(ping)

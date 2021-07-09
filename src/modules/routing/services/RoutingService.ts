@@ -4,11 +4,8 @@
 import type { EventEmitter } from '../../../agent/EventEmitter'
 import type { BaseEvent } from '../../../agent/Events'
 import type { ConnectionRecord } from '../../connections/repository/ConnectionRecord'
-import type { MediationRecordProps } from '../repository/MediationRecord'
-import type { MediationRepository } from '../repository/MediationRepository'
 
 import { AriesFrameworkError } from '../../../error/AriesFrameworkError'
-import { MediationRecord } from '../repository/MediationRecord'
 
 /**
  * waitForEvent
@@ -71,23 +68,6 @@ export const waitForEvent = async (
   })
 }
 /* eslint-enable */
-export async function createRecord(
-  { state, role, connectionId, recipientKeys }: MediationRecordProps,
-  mediatorRepository: MediationRepository
-): Promise<MediationRecord> {
-  const mediationRecord = new MediationRecord({
-    state,
-    role,
-    connectionId,
-    recipientKeys,
-    tags: {
-      role,
-      connectionId,
-    },
-  })
-  await mediatorRepository.save(mediationRecord)
-  return mediationRecord
-}
 
 export function assertConnection(
   record: ConnectionRecord | undefined,

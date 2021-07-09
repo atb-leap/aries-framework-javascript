@@ -46,13 +46,11 @@ describe('Recipient', () => {
       const record = new MediationRecord({
         state: MediationState.Init,
         role: MediationRole.Recipient,
+        threadId: 'fakeThreadId',
         connectionId: 'fakeConnectionId',
         recipientKeys: ['fakeRecipientKey'],
         tags: {
-          state: MediationState.Init,
-          role: MediationRole.Recipient,
-          connectionId: 'fakeConnectionId',
-          default: 'false',
+          default: false,
         },
       })
       assert(record.state, 'Expected MediationRecord to have an `state` property')
@@ -76,8 +74,7 @@ describe('Recipient', () => {
   describe('Recipient service tests', () => {
     it('validate service class signiture', () => {
       assert(recipientService.setDefaultMediator, 'Expected RecipientService to have a `setDefaultMediator` method')
-      assert(recipientService.getDefaultMediator, 'Expected RecipientService to have a `getDefaultMediator` method')
-      assert(recipientService.getDefaultMediatorId, 'Expected RecipientService to have a `getDefaultMediatorId` method')
+      assert(recipientService.findDefaultMediator, 'Expected RecipientService to have a `getDefaultMediator` method')
       assert(recipientService.getMediators, 'Expected RecipientService to have a `getMediators` method')
       assert(recipientService.clearDefaultMediator, 'Expected RecipientService to have a `clearDefaultMediator` method')
       assert(recipientService.findByConnectionId, 'Expected RecipientService to have a `findByConnectionId` method')

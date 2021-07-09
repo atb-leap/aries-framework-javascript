@@ -1,4 +1,3 @@
-import type { TagsBase } from '../../../storage/BaseRecord'
 import type { MediationRole } from '../models/MediationRole'
 import type { Verkey } from 'indy-sdk'
 
@@ -13,18 +12,22 @@ export interface MediationRecordProps {
   role: MediationRole
   createdAt?: Date
   connectionId: string
+  threadId: string
   endpoint?: string
   recipientKeys?: Verkey[]
   routingKeys?: Verkey[]
-  default?: boolean
   tags?: CustomMediationTags
 }
 
-export type CustomMediationTags = TagsBase
+export type CustomMediationTags = {
+  default?: boolean
+}
+
 export type DefaultMediationTags = {
   role: MediationRole
   connectionId: string
   state: MediationState
+  threadId: string
 }
 
 export class MediationRecord
@@ -34,10 +37,11 @@ export class MediationRecord
   public state!: MediationState
   public role!: MediationRole
   public connectionId!: string
+  public threadId!: string
   public endpoint?: string
   public recipientKeys!: Verkey[]
   public routingKeys!: Verkey[]
-  public default = false
+
   public static readonly type = 'MediationRecord'
   public readonly type = MediationRecord.type
 
@@ -48,23 +52,26 @@ export class MediationRecord
       this.id = props.id ?? uuid()
       this.createdAt = props.createdAt ?? new Date()
       this.connectionId = props.connectionId
+      this.threadId = props.threadId
       this.recipientKeys = props.recipientKeys || []
       this.routingKeys = props.routingKeys || []
       this.state = props.state || MediationState.Init
       this.role = props.role
       this.endpoint = props.endpoint ?? undefined
-      this.default = props.default || false
     }
   }
 
-  public getTags(): { state: MediationState; role: MediationRole; connectionId: string } {
+  public getTags() {
     return {
       ...this._tags,
       state: this.state,
       role: this.role,
       connectionId: this.connectionId,
+      threadId: this.threadId,
+      recipientKeys: this.recipientKeys,
     }
   }
+
   public assertState(expectedStates: MediationState | MediationState[]) {
     if (!Array.isArray(expectedStates)) {
       expectedStates = [expectedStates]
