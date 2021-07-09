@@ -1,6 +1,6 @@
 import { Exclude, Type } from 'class-transformer'
 
-export type TagValue = string | boolean | undefined
+export type TagValue = string | boolean | undefined | Array<string>
 export type TagsBase = {
   [key: string]: TagValue
   [key: number]: never

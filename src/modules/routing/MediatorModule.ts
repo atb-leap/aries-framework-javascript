@@ -1,13 +1,14 @@
 import type { WireMessage } from '../../types'
-import type { ConnectionRecord } from '../connections/repository/ConnectionRecord'
-import type { MediationRecord } from './index'
+import type { MediationRecord } from './repository'
 
 import { Lifecycle, scoped } from 'tsyringe'
 
+import { AgentConfig } from '../../agent/AgentConfig'
 import { Dispatcher } from '../../agent/Dispatcher'
 import { EventEmitter } from '../../agent/EventEmitter'
 import { MessageSender } from '../../agent/MessageSender'
 import { createOutboundMessage } from '../../agent/helpers'
+import { ConnectionService } from '../connections/services'
 
 import { KeylistUpdateHandler, ForwardHandler, BatchPickupHandler, BatchHandler } from './handlers'
 import { MediationRequestHandler } from './handlers/MediationRequestHandler'
@@ -20,39 +21,37 @@ export class MediatorModule {
   private messagePickupService: MessagePickupService
   private messageSender: MessageSender
   public eventEmitter: EventEmitter
+  public agentConfig: AgentConfig
+  public connectionService: ConnectionService
 
   public constructor(
     dispatcher: Dispatcher,
     mediationService: MediatorService,
     messagePickupService: MessagePickupService,
     messageSender: MessageSender,
-    eventEmitter: EventEmitter
+    eventEmitter: EventEmitter,
+    agentConfig: AgentConfig,
+    connectionService: ConnectionService
   ) {
     this.mediatorService = mediationService
     this.messagePickupService = messagePickupService
     this.messageSender = messageSender
     this.eventEmitter = eventEmitter
+    this.agentConfig = agentConfig
+    this.connectionService = connectionService
     this.registerHandlers(dispatcher)
   }
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  public async init(config: { autoAcceptMediationRequests: boolean }) {
-    // autoAcceptMediationRequests
-    //             "automatically granting to everyone asking, rather than enabling the feature altogether"
-    //             "After establishing a connection, "
-    //             "if enabled, an agent may request message mediation, which will "
-    //             "allow the mediator to forward messages on behalf of the recipient. "
-    //             "See aries-rfc:0211."
-    //if (config.autoAcceptMediationRequests) {
-    //  this.autoAcceptMediationRequests = config.autoAcceptMediationRequests
-    //}
-  }
-  /* eslint-enable @typescript-eslint/no-unused-vars */
 
-  public async grantRequestedMediation(connectionRecord: ConnectionRecord, mediationRecord: MediationRecord) {
-    const grantMessage = await this.mediatorService.createGrantMediationMessage(mediationRecord)
-    const outboundMessage = createOutboundMessage(connectionRecord, grantMessage)
-    const response = await this.messageSender.sendMessage(outboundMessage)
-    return response
+  public async grantRequestedMediation(mediatorId: string): Promise<MediationRecord> {
+    const record = await this.mediatorService.getById(mediatorId)
+    const connectionRecord = await this.connectionService.getById(record.connectionId)
+
+    const { message, mediationRecord } = await this.mediatorService.createGrantMediationMessage(record)
+    const outboundMessage = createOutboundMessage(connectionRecord, message)
+
+    await this.messageSender.sendMessage(outboundMessage)
+
+    return mediationRecord
   }
 
   public queueMessage(theirKey: string, message: WireMessage) {
@@ -64,6 +63,6 @@ export class MediatorModule {
     dispatcher.registerHandler(new ForwardHandler(this.mediatorService))
     dispatcher.registerHandler(new BatchPickupHandler(this.messagePickupService))
     dispatcher.registerHandler(new BatchHandler(this.eventEmitter))
-    dispatcher.registerHandler(new MediationRequestHandler(this.mediatorService))
+    dispatcher.registerHandler(new MediationRequestHandler(this.mediatorService, this.agentConfig))
   }
 }

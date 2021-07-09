@@ -46,6 +46,7 @@ describe('Recipient', () => {
       const record = new MediationRecord({
         state: MediationState.Init,
         role: MediationRole.Recipient,
+        threadId: 'fakeThreadId',
         connectionId: 'fakeConnectionId',
         recipientKeys: ['fakeRecipientKey'],
         tags: {

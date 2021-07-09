@@ -69,7 +69,7 @@ export class RecipientModule {
   }
 
   public async downloadMessages(mediatorConnection: ConnectionRecord) {
-    let connection = mediatorConnection ?? (await this.getDefaultMediatorConnection())
+    let connection = mediatorConnection ?? (await this.findDefaultMediatorConnection())
     connection = assertConnection(connection, 'connection not found for default mediator')
     const batchPickupMessage = new BatchPickupMessage({ batchSize: 10 })
     const outboundMessage = createOutboundMessage(connection, batchPickupMessage)

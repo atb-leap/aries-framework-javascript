@@ -4,7 +4,6 @@ import type { ConnectionRecord } from '../../connections'
 import type { MediationStateChangedEvent } from '../RoutingEvents'
 import type { ForwardHandler } from '../handlers'
 import type { KeylistUpdateMessage, MediationRequestMessage } from '../messages'
-import type { MediationRecord } from '../repository/MediationRecord'
 import type { Verkey } from 'indy-sdk'
 
 import { inject, Lifecycle, scoped } from 'tsyringe'
@@ -14,7 +13,7 @@ import { EventEmitter } from '../../../agent/EventEmitter'
 import { MessageSender } from '../../../agent/MessageSender'
 import { createOutboundMessage } from '../../../agent/helpers'
 import { InjectionSymbols } from '../../../constants'
-import { uuid } from '../../../utils/uuid'
+import { AriesFrameworkError } from '../../../error'
 import { Wallet } from '../../../wallet/Wallet'
 import { ConnectionService } from '../../connections/services/ConnectionService'
 import { RoutingEventTypes } from '../RoutingEvents'
@@ -27,9 +26,10 @@ import {
 } from '../messages'
 import { MediationRole } from '../models/MediationRole'
 import { MediationState } from '../models/MediationState'
+import { MediationRecord } from '../repository/MediationRecord'
 import { MediationRepository } from '../repository/MediationRepository'
 
-import { assertConnection, createRecord } from './RoutingService'
+import { assertConnection } from './RoutingService'
 
 export interface RoutingTable {
   [recipientKey: string]: ConnectionRecord | undefined
@@ -70,14 +70,14 @@ export class MediatorService {
       throw new Error('Invalid Message: Missing required attribute "to"')
     }
 
-    const connectionId = await this.findRecipient(message.to)
-    if (connectionId) {
+    const mediationRecord = await this.findByRecipientKey(message.to)
+    if (mediationRecord) {
       // TODO: Other checks (verKey, theirKey, etc.)
-      const connectionRecord: ConnectionRecord = await this.connectionService.getById(connectionId)
+      const connectionRecord = await this.connectionService.getById(mediationRecord.connectionId)
       const outbound = createOutboundMessage(connectionRecord, message)
       await this.messageSender.sendMessage(outbound)
     } else {
-      throw new Error(`Connection for verkey ${recipientVerkey} not found!`)
+      throw new AriesFrameworkError(`Connection for verkey ${recipientVerkey} not found!`)
     }
   }
 
@@ -85,10 +85,12 @@ export class MediatorService {
     const { message } = messageContext
     const connection = assertConnection(messageContext.connection)
     const keylist: KeylistUpdated[] = []
+
     const mediationRecord = await this.findRecipientByConnectionId(connection.id)
     if (!mediationRecord) {
-      throw new Error(`mediation record for  ${connection.id} not found!`)
+      throw new AriesFrameworkError(`mediation record for  ${connection.id} not found!`)
     }
+
     for (const update of message.updates) {
       const updated = new KeylistUpdated({
         action: update.action,
@@ -103,103 +105,96 @@ export class MediatorService {
         keylist.push(updated)
       }
     }
-    // emit event to send message that notifies recipient
-    const responseMessage = new KeylistUpdateResponseMessage({ keylist })
-    const outbound = createOutboundMessage(connection, responseMessage)
-    if (message.hasReturnRouting()) {
-      return outbound
-    } else {
-      await this.messageSender.sendMessage(outbound)
-    }
+
+    return new KeylistUpdateResponseMessage({ keylist, threadId: message.threadId })
   }
 
-  public async saveRoute(recipientKey: Verkey, mediationRecord: MediationRecord | null): Promise<KeylistUpdateResult> {
-    if (mediationRecord) {
+  public async saveRoute(recipientKey: Verkey, mediationRecord: MediationRecord) {
+    try {
       mediationRecord.recipientKeys.push(recipientKey)
       this.mediationRepository.update(mediationRecord)
       return KeylistUpdateResult.Success
+    } catch (error) {
+      this.agentConfig.logger.error(
+        `Error processing keylist update action for verkey '${recipientKey}' and mediation record '${mediationRecord.id}'`
+      )
+      return KeylistUpdateResult.ServerError
     }
-    return KeylistUpdateResult.ServerError
   }
 
-  public async removeRoute(recipientKey: Verkey, mediationRecord: MediationRecord | null) {
-    if (mediationRecord) {
+  public async removeRoute(recipientKey: Verkey, mediationRecord: MediationRecord) {
+    try {
       const index = mediationRecord.recipientKeys.indexOf(recipientKey, 0)
       if (index > -1) {
         mediationRecord.recipientKeys.splice(index, 1)
+
+        await this.mediationRepository.update(mediationRecord)
+        return KeylistUpdateResult.Success
       }
-      this.mediationRepository.update(mediationRecord)
-      return KeylistUpdateResult.Success
+
+      return KeylistUpdateResult.ServerError
+    } catch (error) {
+      this.agentConfig.logger.error(
+        `Error processing keylist remove action for verkey '${recipientKey}' and mediation record '${mediationRecord.id}'`
+      )
+      return KeylistUpdateResult.ServerError
     }
-    return KeylistUpdateResult.ServerError
   }
 
-  public async findRecipient(recipientKey: Verkey): Promise<string | null> {
-    const records = await this.getAll()
-    for (const record of records) {
-      for (const key of record.recipientKeys) {
-        if (recipientKey == key) {
-          return record.connectionId
-        }
-      }
-    }
-    return null
+  public async findByRecipientKey(recipientKey: Verkey) {
+    return this.mediationRepository.findByRecipientKey(recipientKey)
   }
+
   // TODO: remove this in favor of find by connection id
   public async findRecipientByConnectionId(connectionId: string): Promise<MediationRecord | null> {
-    try {
-      const records = await this.mediationRepository.findByQuery({ connectionId })
-      return records[0]
-    } catch (error) {
-      this.agentConfig.logger.warn(`Could not find record for connection: ${connectionId}`)
-      return null
-    }
+    return this.mediationRepository.findSingleByQuery({ connectionId })
   }
-  // TODO: resolve possible duplicate keylist messages
-  //public async createKeylistUpdateResponseMessage(keylist: KeylistUpdated[]): Promise<KeylistUpdateResponseMessage> {
-  //const keylistUpdateMessage = new KeylistUpdateResponseMessage({
-  //  updated: keylist,
-  //})
-  //return keylistUpdateMessage
-  //}
 
-  public async createGrantMediationMessage(mediation: MediationRecord): Promise<MediationGrantMessage> {
+  public async createGrantMediationMessage(mediationRecord: MediationRecord) {
+    // Assert
+    mediationRecord.assertState(MediationState.Requested)
+    mediationRecord.assertRole(MediationRole.Mediator)
+
     if (this.routingKeys.length === 0) {
-      /* eslint-disable @typescript-eslint/no-unused-vars */
-      const [_, verkey] = await this.wallet.createDid()
-      /* eslint-enable @typescript-eslint/no-unused-vars */
+      const [, verkey] = await this.wallet.createDid()
       this.routingKeys = [verkey]
     }
-    mediation.state = MediationState.Granted
-    await this.mediationRepository.update(mediation)
-    return new MediationGrantMessage({
-      id: uuid(), // HELP: should this be the thread id from the request?
+
+    mediationRecord.state = MediationState.Granted
+    await this.mediationRepository.update(mediationRecord)
+
+    const message = new MediationGrantMessage({
       endpoint: this.agentConfig.getEndpoint(),
       routingKeys: this.routingKeys,
+      threadId: mediationRecord.threadId,
     })
+
+    return { mediationRecord, message }
   }
 
   public async processMediationRequest(messageContext: InboundMessageContext<MediationRequestMessage>) {
     // Assert connection
     const connection = assertConnection(messageContext.connection)
 
-    const mediationRecord = await createRecord(
-      {
-        connectionId: connection.id,
-        role: MediationRole.Mediator,
-        state: MediationState.Init,
+    const mediationRecord = new MediationRecord({
+      connectionId: connection.id,
+      role: MediationRole.Mediator,
+      state: MediationState.Init,
+      threadId: messageContext.message.threadId,
+    })
+
+    await this.mediationRepository.save(mediationRecord)
+    this.eventEmitter.emit<MediationStateChangedEvent>({
+      type: RoutingEventTypes.MediationStateChanged,
+      payload: {
+        mediationRecord,
+        previousState: null,
       },
-      this.mediationRepository
-    )
+    })
+
     await this.updateState(mediationRecord, MediationState.Init)
 
-    const message = await this.createGrantMediationMessage(mediationRecord)
-    const outbound = createOutboundMessage(connection, message)
-    if (messageContext.message.hasReturnRouting()) {
-      return outbound
-    } else {
-      await this.messageSender.sendMessage(outbound)
-    }
+    return mediationRecord
   }
 
   public async findByConnectionId(connectionId: string): Promise<MediationRecord | null> {
@@ -209,6 +204,14 @@ export class MediatorService {
     } catch (error) {
       return null
     }
+  }
+
+  public async findById(mediatorRecordId: string): Promise<MediationRecord | null> {
+    return this.mediationRepository.findById(mediatorRecordId)
+  }
+
+  public async getById(mediatorRecordId: string): Promise<MediationRecord> {
+    return this.mediationRepository.getById(mediatorRecordId)
   }
 
   public async getAll(): Promise<MediationRecord[]> {

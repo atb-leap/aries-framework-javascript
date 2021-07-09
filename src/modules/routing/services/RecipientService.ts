@@ -30,7 +30,6 @@ import { assertConnection } from './RoutingService'
 export class RecipientService {
   private wallet: Wallet
   private mediatorRepository: MediationRepository
-  private defaultMediator?: MediationRecord
   private eventEmitter: EventEmitter
   private connectionService: ConnectionService
   private messageSender: MessageSender
@@ -55,14 +54,24 @@ export class RecipientService {
   public async createRequest(
     connection: ConnectionRecord
   ): Promise<MediationProtocolMsgReturnType<MediationRequestMessage>> {
+    const message = new MediationRequestMessage({})
+
     const mediationRecord = new MediationRecord({
+      threadId: message.threadId,
       state: MediationState.Requested,
       role: MediationRole.Mediator,
       connectionId: connection.id,
     })
     await this.mediatorRepository.save(mediationRecord)
+    this.eventEmitter.emit<MediationStateChangedEvent>({
+      type: RoutingEventTypes.MediationStateChanged,
+      payload: {
+        mediationRecord,
+        previousState: null,
+      },
+    })
 
-    return { mediationRecord, message: new MediationRequestMessage({}) }
+    return { mediationRecord, message }
   }
 
   public async processMediationGrant(messageContext: InboundMessageContext<MediationGrantMessage>) {
