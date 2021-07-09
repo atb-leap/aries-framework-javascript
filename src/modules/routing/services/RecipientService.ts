@@ -177,24 +177,19 @@ export class RecipientService {
     return keylistUpdateMessage
   }
 
-  public async getRouting(mediationRecord: MediationRecord | undefined, routingKeys: string[], myEndpoint?: string) {
-    let endpoint
-    if (mediationRecord) {
-      routingKeys = [...routingKeys, ...mediationRecord.routingKeys]
-      endpoint = mediationRecord.endpoint
-    }
+  public async getRouting(mediationRecord?: MediationRecord, routingKeys: string[] = [], myEndpoint?: string) {
+    let endpoint: string = myEndpoint ?? this.config.getEndpoint()
     // Create and store new key
     const [did, verkey] = await this.wallet.createDid()
     if (mediationRecord) {
+      routingKeys = [...routingKeys, ...mediationRecord.routingKeys]
+      endpoint = mediationRecord.endpoint ?? endpoint
       // new did has been created and mediator needs to be updated with the public key.
       mediationRecord = await this.keylistUpdateAndAwait(mediationRecord, did)
     } else {
-      // TODO: register recipient keys for relay
       // TODO: check that recipient keys are in wallet
     }
-    endpoint = endpoint ?? myEndpoint ?? this.config.getEndpoint()
-    const result = { mediationRecord, endpoint, routingKeys, did, verkey }
-    return result
+    return { mediationRecord, endpoint, routingKeys, did, verkey }
   }
 
   public async saveRoute(recipientKey: Verkey, mediationRecord: MediationRecord) {
