@@ -1,10 +1,10 @@
 import type { Agent } from '../agent/Agent'
-import type { MessageSender } from '../agent/MessageSender'
 import type { Logger } from '../logger'
 import type { TrustPingMessageOptions } from '../modules/connections/messages/TrustPingMessage'
 import type { ConnectionRecord } from '../modules/connections/repository/ConnectionRecord'
 import type { InboundTransporter } from './InboundTransporter'
 
+import { MessageSender } from '../agent/MessageSender'
 import { createOutboundMessage } from '../agent/helpers'
 import { InjectionSymbols } from '../constants'
 import { ReturnRouteTypes } from '../decorators/transport/TransportDecorator'
@@ -20,7 +20,7 @@ export class WsInboundTransporter implements InboundTransporter {
   public constructor(agent: Agent) {
     this.agent = agent
     this.logger = agent.injectionContainer.resolve(InjectionSymbols.Logger)
-    this.messageSender = agent.injectionContainer.resolve(InjectionSymbols.MessageSender)
+    this.messageSender = agent.injectionContainer.resolve(MessageSender)
   }
   public async start() {
     /** nothing to see here*/

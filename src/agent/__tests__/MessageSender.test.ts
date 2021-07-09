@@ -10,12 +10,14 @@ import { DidCommService } from '../../modules/connections'
 import { AgentMessage } from '../AgentMessage'
 import { EnvelopeService as EnvelopeServiceImpl } from '../EnvelopeService'
 import { MessageSender } from '../MessageSender'
-import { TransportService as TransportServiceImpl } from '../TransportService'
+import { TransportService } from '../TransportService'
 import { createOutboundMessage } from '../helpers'
+import { DID_COMM_TRANSPORT_QUEUE } from '../../constants'
 
 jest.mock('../TransportService')
 jest.mock('../EnvelopeService')
 
+const TransportServiceMock = TransportService as jest.MockedClass<typeof TransportService>
 const logger = testLogger
 
 class DummyOutboundTransporter implements OutboundTransporter {
@@ -39,7 +41,6 @@ class DummyTransportSession implements TransportSession {
 }
 
 describe('MessageSender', () => {
-  const TransportService = <jest.Mock<TransportServiceImpl>>(<unknown>TransportServiceImpl)
   const EnvelopeService = <jest.Mock<EnvelopeServiceImpl>>(<unknown>EnvelopeServiceImpl)
 
   const wireMessage = {
@@ -54,9 +55,10 @@ describe('MessageSender', () => {
   const enveloperService = new EnvelopeService()
   const envelopeServicePackMessageMock = mockFunction(enveloperService.packMessage)
 
-  const transportService = new TransportService()
+  const transportServiceMock = new TransportServiceMock()
   const session = new DummyTransportSession()
-  const transportServiceFindSessionMock = mockFunction(transportService.findSession)
+  const transportServiceFindSessionMock = mockFunction(transportServiceMock.findSession)
+  const transportServiceHasInboundEndpoint = mockFunction(transportServiceMock.hasInboundEndpoint)
 
   const firstDidCommService = new DidCommService({
     id: `<did>;indy`,
@@ -68,7 +70,7 @@ describe('MessageSender', () => {
     serviceEndpoint: 'https://www.second-endpoint.com',
     recipientKeys: ['verkey'],
   })
-  const transportServiceFindServicesMock = mockFunction(transportService.findDidCommServices)
+  const transportServiceFindServicesMock = mockFunction(transportServiceMock.findDidCommServices)
 
   let messageSender: MessageSender
   let outboundTransporter: OutboundTransporter
@@ -77,8 +79,10 @@ describe('MessageSender', () => {
 
   describe('sendMessage', () => {
     beforeEach(() => {
+      TransportServiceMock.mockClear()
+      transportServiceHasInboundEndpoint.mockReturnValue(true)
       outboundTransporter = new DummyOutboundTransporter()
-      messageSender = new MessageSender(enveloperService, transportService, logger)
+      messageSender = new MessageSender(enveloperService, transportServiceMock, logger)
       connection = getMockConnection({ id: 'test-123' })
 
       outboundMessage = createOutboundMessage(connection, new AgentMessage())
@@ -110,7 +114,6 @@ describe('MessageSender', () => {
       const sendMessageSpy = jest.spyOn(outboundTransporter, 'sendMessage')
 
       await messageSender.sendMessage(outboundMessage)
-
       expect(sendMessageSpy).toHaveBeenCalledWith({
         connection,
         payload: wireMessage,
@@ -164,7 +167,7 @@ describe('MessageSender', () => {
   describe('packMessage', () => {
     beforeEach(() => {
       outboundTransporter = new DummyOutboundTransporter()
-      messageSender = new MessageSender(enveloperService, transportService, logger)
+      messageSender = new MessageSender(enveloperService, transportServiceMock, logger)
       connection = getMockConnection({ id: 'test-123' })
 
       envelopeServicePackMessageMock.mockReturnValue(Promise.resolve(wireMessage))

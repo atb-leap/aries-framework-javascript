@@ -1,26 +1,25 @@
 import type { ConnectionRecord } from '../modules/connections/repository'
 
-import { Lifecycle, scoped, inject } from 'tsyringe'
+import { Lifecycle, scoped } from 'tsyringe'
 
-import { DID_COMM_TRANSPORT_QUEUE, InjectionSymbols } from '../constants'
-import { Logger } from '../logger'
+import { DID_COMM_TRANSPORT_QUEUE } from '../constants'
 import { ConnectionRole, DidCommService } from '../modules/connections/models'
 
 @scoped(Lifecycle.ContainerScoped)
 export class TransportService {
   private transportSessionTable: TransportSessionTable = {}
-  private logger: Logger
 
-  public constructor(@inject(InjectionSymbols.Logger) logger: Logger) {
-    this.logger = logger
+  public constructor() {
   }
 
   public saveSession(connectionId: string, transport: TransportSession) {
     this.transportSessionTable[connectionId] = transport
   }
 
-  public hasInboundEndpoint(connection: ConnectionRecord) {
-    return connection.didDoc.didCommServices.find((s) => s.serviceEndpoint !== DID_COMM_TRANSPORT_QUEUE)
+  public hasInboundEndpoint(connection: ConnectionRecord) : boolean {
+    return Boolean(
+      connection.didDoc.didCommServices.find((s) => s.serviceEndpoint !== DID_COMM_TRANSPORT_QUEUE)
+    )
   }
 
   public findSession(connectionId: string) {

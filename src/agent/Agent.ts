@@ -107,10 +107,12 @@ export class Agent {
   }
 
   public setInboundTransporter(inboundTransporter: InboundTransporter) {
+    this.container.registerInstance(InjectionSymbols.InboundTransporter, inboundTransporter)
     this.inboundTransporter = inboundTransporter
   }
 
   public setOutboundTransporter(outboundTransporter: OutboundTransporter) {
+    this.container.registerInstance(InjectionSymbols.OutboundTransporter, outboundTransporter)
     this.messageSender.setOutboundTransporter(outboundTransporter)
   }
 

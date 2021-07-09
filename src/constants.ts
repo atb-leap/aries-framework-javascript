@@ -5,8 +5,10 @@ export const InjectionSymbols = {
   StorageService: Symbol('StorageService'),
   Logger: Symbol('Logger'),
   FileSystem: Symbol('FileSystem'),
-  ConnectionService: Symbol('ConnectionService'),
   MessageSender: Symbol('MessageSender'),
+  InboundTransporter: Symbol('InboundTransporter'),
+  OutboundTransporter: Symbol('OutboundTransporter'),
+  TransportService: Symbol('TransportService'),
 }
 
 export const DID_COMM_TRANSPORT_QUEUE = 'didcomm:transport/queue'
