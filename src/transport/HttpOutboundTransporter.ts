@@ -76,8 +76,9 @@ export class HttpOutboundTransporter implements OutboundTransporter {
           this.logger.debug(`No response received.`)
         }
       } catch (error) {
-        this.logger.error(`Error sending message to ${endpoint}`, {
+        this.logger.error(`Error sending message to ${endpoint}: ${error.message}`, {
           error,
+          message: error.message,
           body: payload,
           didCommMimeType: this.agentConfig.didCommMimeType,
         })

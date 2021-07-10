@@ -62,22 +62,16 @@ export class ConnectionService {
    * @returns new connection record
    */
   public async createInvitation(config: {
+    routing: Routing
     autoAcceptConnection?: boolean
     alias?: string
-    endpoint: string
-    did: Did
-    verkey: string
-    routingKeys: string[]
   }): Promise<ConnectionProtocolMsgReturnType<ConnectionInvitationMessage>> {
     // TODO: public did, multi use
     const connectionRecord = await this.createConnection({
       role: ConnectionRole.Inviter,
       state: ConnectionState.Invited,
       alias: config?.alias,
-      endpoint: config.endpoint,
-      did: config.did,
-      verkey: config.verkey,
-      routingKeys: config.routingKeys,
+      routing: config.routing,
       autoAcceptConnection: config?.autoAcceptConnection,
     })
 
@@ -117,23 +111,23 @@ export class ConnectionService {
   public async processInvitation(
     invitation: ConnectionInvitationMessage,
     config: {
+      routing: {
+        endpoint: string
+        verkey: string
+        did: Did
+        routingKeys: string[]
+      }
       autoAcceptConnection?: boolean
       alias?: string
-      endpoint: string
-      verkey: string
-      did: Did
-      routingKeys: string[]
     }
   ): Promise<ConnectionRecord> {
     const connectionRecord = await this.createConnection({
       role: ConnectionRole.Invitee,
       state: ConnectionState.Invited,
       alias: config?.alias,
+      theirLabel: invitation.label,
       autoAcceptConnection: config?.autoAcceptConnection,
-      endpoint: config?.endpoint,
-      did: config?.did,
-      verkey: config?.verkey,
-      routingKeys: config.routingKeys,
+      routing: config.routing,
       invitation,
       tags: {
         invitationKey: invitation.recipientKeys && invitation.recipientKeys[0],
@@ -203,6 +197,7 @@ export class ConnectionService {
     }
 
     connectionRecord.theirDidDoc = message.connection.didDoc
+    connectionRecord.theirLabel = message.label
     connectionRecord.threadId = message.id
     connectionRecord.theirDid = message.connection.did
 
@@ -435,19 +430,14 @@ export class ConnectionService {
   private async createConnection(options: {
     role: ConnectionRole
     state: ConnectionState
-    endpoint: string
     invitation?: ConnectionInvitationMessage
     alias?: string
-    did: Did
-    verkey: string
-    routingKeys: string[]
+    routing: Routing
+    theirLabel?: string
     autoAcceptConnection?: boolean
     tags?: CustomConnectionTags
   }): Promise<ConnectionRecord> {
-    const endpoint: string = options.endpoint
-    const did: Did = options.did
-    const verkey: Verkey = options.verkey
-    const routingKeys: Verkey[] = options.routingKeys
+    const { endpoint, did, verkey, routingKeys } = options.routing
 
     const publicKey = new Ed25119Sig2018({
       // TODO: shouldn't this name be ED25519
@@ -494,6 +484,7 @@ export class ConnectionService {
       tags: options.tags,
       invitation: options.invitation,
       alias: options.alias,
+      theirLabel: options.theirLabel,
       autoAcceptConnection: options.autoAcceptConnection,
     })
 
@@ -524,6 +515,13 @@ export class ConnectionService {
     // return listener
     return promise
   }
+}
+
+export interface Routing {
+  endpoint: string
+  verkey: string
+  did: Did
+  routingKeys: string[]
 }
 
 export interface ConnectionProtocolMsgReturnType<MessageType extends AgentMessage> {

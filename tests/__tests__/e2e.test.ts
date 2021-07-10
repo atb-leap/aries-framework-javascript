@@ -1,71 +1,49 @@
-import type { InboundTransporter, MediationRecord } from '../../src'
-import type { MockInBoundTransporter } from '../../src/__tests__/helpers'
+import { DefaultMediatorPollingInboundTransporter, MediationRecord } from '../../src'
 
-import { noop } from 'rxjs'
 import WebSocket from 'ws'
 
+import { HttpOutboundTransporter, Agent, MediationState, WsOutboundTransporter } from '../../src'
 import {
-  HttpOutboundTransporter,
-  TrustPingPollingInboundTransporter,
-  Agent,
-  MediationState,
-  WsOutboundTransporter,
-  WebSocketTransportSession,
-} from '../../src'
-import { getBaseConfig, makeConnection, makeInBoundTransporter, makeTransport } from '../../src/__tests__/helpers'
-import logger from '../../src/__tests__/logger'
+  closeAndDeleteWallet,
+  getBaseConfig,
+  makeConnection,
+  makeInBoundTransporter,
+  makeTransport,
+} from '../../src/__tests__/helpers'
 import { InMemoryMessageRepository } from '../../src/storage/InMemoryMessageRepository'
+import { WsInboundTransporter } from '../transport/WsInboundTransport'
 
 const recipientConfig = getBaseConfig('recipient')
 const mediatorConfig = getBaseConfig('mediator', {
   host: 'http://localhost',
   port: 3002,
 })
-/*const tedConfig = getBaseConfig('ted', {
-  host: 'http://localhost',
-  port: 3003,
-})*/
 
 describe('mediator establishment', () => {
   let recipientAgent: Agent
   let mediatorAgent: Agent
-  beforeAll((done) => {
-    done()
-  })
+
   beforeEach(async () => {
     recipientAgent = new Agent(recipientConfig)
     mediatorAgent = new Agent(mediatorConfig, new InMemoryMessageRepository())
   })
 
   afterEach(async () => {
-    try {
-      await recipientAgent.closeAndDeleteWallet()
-    } catch (e) {
-      noop()
-    }
-    try {
-      await mediatorAgent.closeAndDeleteWallet()
-    } catch (e) {
-      noop()
-    }
+    // Close and delete wallets
+    await closeAndDeleteWallet(recipientAgent)
+    await closeAndDeleteWallet(mediatorAgent)
+
+    // Stop all transports
+    await recipientAgent.outboundTransporter?.stop()
+    await recipientAgent.inboundTransporter?.stop()
+    await mediatorAgent.outboundTransporter?.stop()
+    await mediatorAgent.inboundTransporter?.stop()
   })
-  afterAll(async (done) => {
-    try {
-      await recipientAgent.closeAndDeleteWallet()
-    } catch (e) {
-      noop()
-    }
-    try {
-      await mediatorAgent.closeAndDeleteWallet()
-    } catch (e) {
-      noop()
-    }
-    done()
-  })
+
   test('recipient and mediator establish a connection and granted mediation', async () => {
     await makeTransport(
       recipientAgent,
-      new TrustPingPollingInboundTransporter(),
+      new DefaultMediatorPollingInboundTransporter(),
       new HttpOutboundTransporter(recipientAgent)
     )
     await makeTransport(mediatorAgent, makeInBoundTransporter(), new HttpOutboundTransporter(mediatorAgent))
@@ -82,30 +60,20 @@ describe('mediator establishment', () => {
       recipientAgentConnection
     )
     expect(mediationRecord.state).toBe(MediationState.Granted)
-
-    try {
-      await (recipientAgent.inboundTransporter as TrustPingPollingInboundTransporter).stop()
-    } catch (e) {
-      noop()
-    }
-    try {
-      await (mediatorAgent.inboundTransporter as MockInBoundTransporter).stop()
-    } catch (e) {
-      noop()
-    }
   })
 
   test('recipient and mediator establish a connection and granted mediation with WebSockets', async () => {
-    const socketServer = new WebSocket.Server({ noServer: true })
+    const recipientSocketServer = new WebSocket.Server({ noServer: true })
     await makeTransport(
       recipientAgent,
-      new WsInboundTransporter(socketServer),
+      new WsInboundTransporter(recipientSocketServer),
       new WsOutboundTransporter(recipientAgent)
     )
-    const socketServer_ = new WebSocket.Server({ noServer: false, port: 3002 })
+
+    const mediatorSocketServer = new WebSocket.Server({ noServer: false, port: 3002 })
     await makeTransport(
       mediatorAgent,
-      new WsInboundTransporter(socketServer_),
+      new WsInboundTransporter(mediatorSocketServer),
       new WsOutboundTransporter(mediatorAgent)
     )
 
@@ -121,26 +89,6 @@ describe('mediator establishment', () => {
       recipientAgentConnection
     )
     expect(mediationRecord.state).toBe(MediationState.Granted)
-    try {
-      await (recipientAgent.outboundTransporter as WsOutboundTransporter).stop()
-    } catch (e) {
-      noop()
-    }
-    try {
-      await (recipientAgent.inboundTransporter as WsInboundTransporter).stop()
-    } catch (e) {
-      noop()
-    }
-    try {
-      await (mediatorAgent.outboundTransporter as WsOutboundTransporter).stop()
-    } catch (e) {
-      noop()
-    }
-    try {
-      await (mediatorAgent.inboundTransporter as WsInboundTransporter).stop()
-    } catch (e) {
-      noop()
-    }
   })
 })
 
@@ -253,55 +201,3 @@ describe('mediator establishment', () => {
      expect(basicMessage.content).toBe(message)
    })
 })*/
-
-export class WsInboundTransporter implements InboundTransporter {
-  private socketServer: WebSocket.Server
-
-  // We're using a `socketId` just for the prevention of calling the connection handler twice.
-  private socketIds: Record<string, unknown> = {}
-
-  public constructor(socketServer: WebSocket.Server) {
-    this.socketServer = socketServer
-  }
-
-  public async start(agent: Agent) {
-    this.socketServer.on('connection', (socket: WebSocket, _: Express.Request, socketId: string) => {
-      if (!this.socketIds[socketId]) {
-        logger.debug(`Saving new socket with id ${socketId}.`)
-        this.socketIds[socketId] = socket
-        this.listenOnWebSocketMessages(agent, socket)
-        socket.on('close', () => logger.debug('Socket closed.'))
-      } else {
-        logger.debug(`Socket with id ${socketId} already exists.`)
-      }
-    })
-  }
-
-  public async stop() {
-    logger.debug('Closing Socket Server')
-    const promise: Promise<void> = new Promise((resolve, reject) => {
-      this.socketServer.close((error) => {
-        if (error) {
-          logger.error('Error closing socket server')
-          reject(error)
-        } else {
-          resolve()
-        }
-      })
-    })
-
-    return promise
-  }
-
-  private listenOnWebSocketMessages(agent: Agent, socket: WebSocket) {
-    socket.addEventListener('message', async (event): Promise<void> => {
-      logger.debug('WebSocket message event received.', { url: event.target.url, data: event.data })
-      // @ts-expect-error Property 'dispatchEvent' is missing in type WebSocket imported from 'ws' module but required in type 'WebSocket'.
-      const session = new WebSocketTransportSession(socket)
-      const outboundMessage = await agent.receiveMessage(JSON.parse(event.data), session)
-      if (outboundMessage) {
-        socket.send(JSON.stringify(outboundMessage.payload))
-      }
-    })
-  }
-}

@@ -1,4 +1,5 @@
 import type { Agent } from '../agent/Agent'
+import type { TransportSession } from '../agent/TransportService'
 import type { BasicMessage, BasicMessageReceivedEvent } from '../modules/basic-messages'
 import type { ConnectionRecordProps } from '../modules/connections'
 import type { CredentialRecord, CredentialOfferTemplate, CredentialStateChangedEvent } from '../modules/credentials'
@@ -6,8 +7,7 @@ import type { SchemaTemplate, CredentialDefinitionTemplate } from '../modules/le
 import type { ProofRecord, ProofState, ProofStateChangedEvent } from '../modules/proofs'
 import type { InboundTransporter, OutboundTransporter } from '../transport'
 import type { InitConfig, OutboundPackage, WireMessage } from '../types'
-import type { Express } from 'express'
-import type { Server } from 'http'
+import type { Wallet } from '../wallet/Wallet'
 import type { CredDef, Did, Schema } from 'indy-sdk'
 import type { Subject } from 'rxjs'
 
@@ -16,6 +16,8 @@ import express from 'express'
 import indy from 'indy-sdk'
 import path from 'path'
 
+import { HttpInboundTransporter } from '../../tests/mediator'
+import { InjectionSymbols } from '../constants'
 import { BasicMessageEventTypes } from '../modules/basic-messages'
 import {
   ConnectionInvitationMessage,
@@ -28,6 +30,7 @@ import {
 import { CredentialEventTypes, CredentialState } from '../modules/credentials'
 import { ProofEventTypes } from '../modules/proofs'
 import { NodeFileSystem } from '../storage/fs/NodeFileSystem'
+import { DidCommMimeType } from '../types'
 
 import testLogger from './logger'
 
@@ -52,6 +55,12 @@ export function getBaseConfig(name: string, extraConfig: Partial<InitConfig> = {
   }
 
   return config
+}
+
+export async function closeAndDeleteWallet(agent: Agent) {
+  const wallet = agent.injectionContainer.resolve<Wallet>(InjectionSymbols.Wallet)
+
+  await wallet.delete()
 }
 
 export async function waitForProofRecord(
@@ -128,6 +137,22 @@ export async function waitForBasicMessage(agent: Agent, { content }: { content?:
   })
 }
 
+class SubjectTransportSession implements TransportSession {
+  public id: string
+  public readonly type = 'subject'
+  private theirSubject: Subject<WireMessage>
+
+  public constructor(id: string, theirSubject: Subject<WireMessage>) {
+    this.id = id
+    this.theirSubject = theirSubject
+  }
+
+  public send(outboundMessage: OutboundPackage): Promise<void> {
+    this.theirSubject.next(outboundMessage.payload)
+    return Promise.resolve()
+  }
+}
+
 export class SubjectInboundTransporter implements InboundTransporter {
   private subject: Subject<WireMessage>
   private theirSubject: Subject<WireMessage>
@@ -144,10 +169,8 @@ export class SubjectInboundTransporter implements InboundTransporter {
   private subscribe(agent: Agent) {
     this.subject.subscribe({
       next: async (message: WireMessage) => {
-        const outboundMessage = await agent.receiveMessage(message)
-        if (outboundMessage) {
-          this.theirSubject.next(outboundMessage.payload)
-        }
+        const session = new SubjectTransportSession('subject-session-1', this.theirSubject)
+        await agent.receiveMessage(message, session)
       },
     })
   }
@@ -260,7 +283,7 @@ export async function makeTransport(
 ) {
   agent.setInboundTransporter(inboundTransporter)
   agent.setOutboundTransporter(outboundTransporter)
-  await agent.init()
+  await agent.initialize()
 }
 
 export function makeInBoundTransporter() {
@@ -269,39 +292,11 @@ export function makeInBoundTransporter() {
   app.use(express.json())
   app.use(
     express.text({
-      type: ['application/ssi-agent-wire', 'text/plain'],
+      type: [DidCommMimeType.V0, DidCommMimeType.V1],
     })
   )
   app.set('json spaces', 2)
-  return new MockInBoundTransporter(app)
-}
-
-export class MockInBoundTransporter implements InboundTransporter {
-  private app: Express
-  public server?: Server
-  public constructor(app: Express) {
-    this.app = app
-  }
-  public async start(agent: Agent) {
-    this.app.post('/msg', async (req, res) => {
-      const packedMessage = JSON.parse(req.body)
-      try {
-        const outboundMessage = await agent.receiveMessage(packedMessage)
-        if (outboundMessage) {
-          res.status(200).json(outboundMessage.payload).end()
-        } else {
-          res.status(200).end()
-        }
-      } catch (e) {
-        // TODO: support more error codes
-        res.status(500).send(JSON.stringify(e)).end()
-      }
-    })
-    this.server = this.app.listen(agent.port)
-  }
-  public async stop(): Promise<void> {
-    this.server?.close()
-  }
+  return new HttpInboundTransporter(app)
 }
 
 export async function registerSchema(agent: Agent, schemaTemplate: SchemaTemplate): Promise<Schema> {

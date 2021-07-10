@@ -5,8 +5,6 @@ import { Equals, IsArray, IsNotEmpty, IsString } from 'class-validator'
 
 import { AgentMessage } from '../../../agent/AgentMessage'
 
-import { RoutingMessageType as MessageType } from './RoutingMessageType'
-
 export interface MediationGrantMessageOptions {
   id?: string
   endpoint: string
@@ -36,7 +34,7 @@ export class MediationGrantMessage extends AgentMessage {
 
   @Equals(MediationGrantMessage.type)
   public readonly type = MediationGrantMessage.type
-  public static readonly type = MessageType.MediationGrant
+  public static readonly type = 'https://didcomm.org/coordinate-mediation/1.0/mediate-grant'
 
   @IsNotEmpty()
   @IsArray()

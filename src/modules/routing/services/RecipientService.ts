@@ -155,8 +155,10 @@ export class RecipientService {
     return keylistUpdateMessage
   }
 
-  public async getRouting(mediationRecord?: MediationRecord, routingKeys: string[] = [], myEndpoint?: string) {
-    let endpoint: string = myEndpoint ?? this.config.getEndpoint()
+  public async getRouting(mediationRecord?: MediationRecord) {
+    let endpoint = this.config.getEndpoint()
+    let routingKeys: string[] = []
+
     // Create and store new key
     const [did, verkey] = await this.wallet.createDid()
     if (mediationRecord) {

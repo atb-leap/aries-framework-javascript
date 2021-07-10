@@ -3,8 +3,6 @@ import { Equals, IsArray, ValidateNested } from 'class-validator'
 
 import { AgentMessage } from '../../../agent/AgentMessage'
 
-import { RoutingMessageType as MessageType } from './RoutingMessageType'
-
 export interface KeylistMessageOptions {
   id?: string
 }
@@ -25,7 +23,7 @@ export class KeylistMessage extends AgentMessage {
 
   @Equals(KeylistMessage.type)
   public readonly type = KeylistMessage.type
-  public static readonly type = MessageType.Keylist
+  public static readonly type = 'https://didcomm.org/coordinate-mediation/1.0/keylist'
 
   @Type(() => Keylist)
   @IsArray()

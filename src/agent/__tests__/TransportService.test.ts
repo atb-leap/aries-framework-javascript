@@ -2,6 +2,8 @@ import { getMockConnection } from '../../__tests__/helpers'
 import { ConnectionInvitationMessage, ConnectionRole, DidCommService, DidDoc } from '../../modules/connections'
 import { TransportService } from '../TransportService'
 
+import { DummyTransportSession } from './stubs'
+
 describe('TransportService', () => {
   describe('findServices', () => {
     let transportService: TransportService
@@ -57,6 +59,26 @@ describe('TransportService', () => {
           recipientKeys: ['verkey'],
         }),
       ])
+    })
+  })
+
+  describe('removeSession', () => {
+    let transportService: TransportService
+
+    beforeEach(() => {
+      transportService = new TransportService()
+    })
+
+    test(`remove session saved for a given connection`, () => {
+      const connection = getMockConnection({ id: 'test-123', role: ConnectionRole.Inviter })
+      const session = new DummyTransportSession('dummy-session-123')
+      session.connection = connection
+
+      transportService.saveSession(session)
+      expect(transportService.findSessionByConnectionId(connection.id)).toEqual(session)
+
+      transportService.removeSession(session)
+      expect(transportService.findSessionByConnectionId(connection.id)).toEqual(undefined)
     })
   })
 })

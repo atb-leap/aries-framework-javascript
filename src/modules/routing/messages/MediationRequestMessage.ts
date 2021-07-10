@@ -3,8 +3,6 @@ import { Equals, IsDate } from 'class-validator'
 
 import { AgentMessage } from '../../../agent/AgentMessage'
 
-import { RoutingMessageType } from './RoutingMessageType'
-
 export interface MediationRequestMessageOptions {
   sentTime?: Date
   id?: string
@@ -35,7 +33,7 @@ export class MediationRequestMessage extends AgentMessage {
 
   @Equals(MediationRequestMessage.type)
   public readonly type = MediationRequestMessage.type
-  public static readonly type = RoutingMessageType.MediationRequest
+  public static readonly type = 'https://didcomm.org/coordinate-mediation/1.0/mediate-request'
 
   @Expose({ name: 'sent_time' })
   @Type(() => Date)
