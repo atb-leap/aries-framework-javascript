@@ -21,7 +21,6 @@ export interface InitConfig {
   endpoint?: string
   label: string
   publicDidSeed?: string
-  mediatorUrl?: string
   mediatorRecordId?: string
   walletConfig: WalletConfig
   walletCredentials: WalletCredentials

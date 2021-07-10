@@ -12,12 +12,16 @@ export class MediationRepository extends Repository<MediationRecord> {
     super(MediationRecord, storageService)
   }
 
-  public findByRecipientKey(recipientKey: string) {
+  public getSingleByRecipientKey(recipientKey: string) {
     // TODO: would be nice if the query method could automatically handle arrays
     const tag = `recipientKey:${recipientKey}`
 
-    return this.findSingleByQuery({
+    return this.getSingleByQuery({
       [tag]: true,
     })
+  }
+
+  public async getByConnectionId(connectionId: string): Promise<MediationRecord> {
+    return this.getSingleByQuery({ connectionId })
   }
 }

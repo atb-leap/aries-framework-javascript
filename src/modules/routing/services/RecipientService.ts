@@ -19,8 +19,7 @@ import { Wallet } from '../../../wallet/Wallet'
 import { ConnectionService } from '../../connections/services/ConnectionService'
 import { RoutingEventTypes } from '../RoutingEvents'
 import { KeylistUpdateAction, MediationRequestMessage } from '../messages'
-import { KeylistMessage } from '../messages/KeylistMessage'
-import { KeylistUpdate, KeylistUpdateMessage } from '../messages/KeylistUpdatedMessage'
+import { KeylistUpdate, KeylistUpdateMessage } from '../messages/KeylistUpdateMessage'
 import { MediationRole, MediationState } from '../models'
 import { MediationRecord } from '../repository/MediationRecord'
 import { MediationRepository } from '../repository/MediationRepository'
@@ -78,10 +77,8 @@ export class RecipientService {
     const connection = messageContext.assertReadyConnection()
 
     // Mediation record must already exists to be updated to granted status
-    const mediationRecord = await this.findByConnectionId(connection.id)
-    if (!mediationRecord) {
-      throw new Error(`No mediation has been requested for this connection id: ${connection.id}`)
-    }
+    const mediationRecord = await this.mediatorRepository.getByConnectionId(connection.id)
+
     // Assert
     mediationRecord.assertState(MediationState.Requested)
 
@@ -91,27 +88,11 @@ export class RecipientService {
     return await this.updateState(mediationRecord, MediationState.Granted)
   }
 
-  /* eslint-disable @typescript-eslint/no-unused-vars */
-  public createKeylistQuery(
-    filter?: Map<string, string>,
-    paginateLimit?: number | undefined,
-    paginateOffset?: number | undefined
-  ) {
-    //paginateLimit = paginateLimit ?? -1,
-    //paginateOffset = paginateOffset ?? 0
-    // TODO: Implement this
-    return new KeylistMessage({})
-  }
-  /* eslint-enable @typescript-eslint/no-unused-vars */
-
   public async processKeylistUpdateResults(messageContext: InboundMessageContext<KeylistUpdateResponseMessage>) {
     // Assert ready connection
     const connection = messageContext.assertReadyConnection()
 
-    const mediationRecord = await this.findByConnectionId(connection.id)
-    if (!mediationRecord) {
-      throw new Error(`mediation record for  ${connection.id} not found!`)
-    }
+    const mediationRecord = await this.mediatorRepository.getByConnectionId(connection.id)
     const keylist = messageContext.message.updated
 
     // update keylist in mediationRecord
@@ -244,8 +225,8 @@ export class RecipientService {
     return mediationRecord
   }
 
-  public async findById(id: string): Promise<MediationRecord | null> {
-    return this.mediatorRepository.findById(id)
+  public async getById(id: string): Promise<MediationRecord> {
+    return this.mediatorRepository.getById(id)
   }
 
   public async findByConnectionId(connectionId: string): Promise<MediationRecord | null> {

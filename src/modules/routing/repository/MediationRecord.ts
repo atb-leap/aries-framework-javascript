@@ -72,6 +72,18 @@ export class MediationRecord
     }
   }
 
+  public get isReady() {
+    return this.state === MediationState.Granted
+  }
+
+  public assertReady() {
+    if (!this.isReady) {
+      throw new AriesFrameworkError(
+        `Mediation record is not ready to be used. Expected ${MediationState.Granted}, found invalid state ${this.state}`
+      )
+    }
+  }
+
   public assertState(expectedStates: MediationState | MediationState[]) {
     if (!Array.isArray(expectedStates)) {
       expectedStates = [expectedStates]

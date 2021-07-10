@@ -30,6 +30,7 @@ export class MessagePickupService {
     if (!this.messageRepository) {
       throw new AriesFrameworkError('There is no message repository.')
     }
+
     if (!connection.theirKey) {
       throw new AriesFrameworkError('Trying to find messages to connection without theirKey!')
     }

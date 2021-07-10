@@ -4,7 +4,8 @@ import type { OutboundPackage } from '../types'
 import type { OutboundTransporter } from './OutboundTransporter'
 
 import { AgentConfig } from '../agent/AgentConfig'
-import { InjectionSymbols } from '../constants'
+import { DID_COMM_TRANSPORT_QUEUE, InjectionSymbols } from '../constants'
+import { AriesFrameworkError } from '../error'
 import { fetch } from '../utils/fetch'
 
 export class HttpOutboundTransporter implements OutboundTransporter {
@@ -36,52 +37,51 @@ export class HttpOutboundTransporter implements OutboundTransporter {
     const { connection, payload, endpoint } = outboundPackage
 
     if (!endpoint) {
-      throw new Error(`Missing endpoint. I don't know how and where to send the message.`)
-      return
+      throw new AriesFrameworkError(`Missing endpoint. I don't know how and where to send the message.`)
     }
     // TODO: use mediation config for queue logic
-    if (endpoint == 'didcomm:transport/queue') {
+    // TODO: move this logic to the message sender
+    if (endpoint === DID_COMM_TRANSPORT_QUEUE) {
       this.logger.debug('Storing message for queue: ', { connection, payload })
       connection.assertReady()
-      if (connection && connection.theirKey) {
+      if (connection.theirKey) {
         this.agent.mediator.queueMessage(connection.theirKey, payload)
       }
-      return
-    }
-    this.logger.debug(
-      `Sending outbound message to connection ${outboundPackage.connection.id}`,
-      outboundPackage.payload
-    )
-    try {
-      const response = fetch(endpoint, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-        headers: { 'Content-Type': this.agentConfig.didCommMimeType },
-      })
+    } else {
+      this.logger.debug(
+        `Sending outbound message to connection ${outboundPackage.connection.id}`,
+        outboundPackage.payload
+      )
+      try {
+        const abortController = new AbortController()
+        const id = setTimeout(() => abortController.abort(), 15000)
 
-      const action = await Promise.race([
-        response,
-        new Promise((accept) => {
-          setTimeout(() => accept(false), 15000)
-        }),
-      ])
-      const responseMessage = action ? await (action as Response).text() : false
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+          headers: { 'Content-Type': this.agentConfig.didCommMimeType },
+          signal: abortController.signal,
+        })
+        clearTimeout(id)
 
-      // TODO: do we just want to ignore messages that were
-      // returned if we didn't request it?
-      if (responseMessage) {
-        this.logger.debug(`Response received:\n ${response}`)
-        const wireMessage = JSON.parse(responseMessage)
-        this.agent.receiveMessage(wireMessage)
-      } else {
-        this.logger.debug(`No response received.`)
+        const responseMessage = await response.text()
+
+        // TODO: do we just want to ignore messages that were
+        // returned if we didn't request it?
+        if (responseMessage) {
+          this.logger.debug(`Response received:\n ${response}`)
+          const wireMessage = JSON.parse(responseMessage)
+          this.agent.receiveMessage(wireMessage)
+        } else {
+          this.logger.debug(`No response received.`)
+        }
+      } catch (error) {
+        this.logger.error(`Error sending message to ${endpoint}`, {
+          error,
+          body: payload,
+          didCommMimeType: this.agentConfig.didCommMimeType,
+        })
       }
-    } catch (error) {
-      this.logger.error(`Error sending message to ${endpoint}`, {
-        error,
-        body: payload,
-        didCommMimeType: this.agentConfig.didCommMimeType,
-      })
     }
   }
 }

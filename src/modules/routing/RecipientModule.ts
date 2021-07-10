@@ -49,15 +49,11 @@ export class RecipientModule {
 
   public async initialize() {
     const { defaultMediatorId, clearDefaultMediator } = this.agentConfig
+
     // Set default mediator by id
-    if (this.agentConfig.defaultMediatorId) {
-      const mediatorRecord = await this.recipientService.findById(this.agentConfig.defaultMediatorId)
-      if (mediatorRecord) {
-        await this.recipientService.setDefaultMediator(mediatorRecord)
-      } else {
-        this.agentConfig.logger.error(`Mediator record with id ${defaultMediatorId} not found from config`)
-        // TODO: Handle error properly - not found condition
-      }
+    if (defaultMediatorId) {
+      const mediatorRecord = await this.recipientService.getById(defaultMediatorId)
+      await this.recipientService.setDefaultMediator(mediatorRecord)
     }
     // Clear the stored default mediator
     else if (clearDefaultMediator) {
@@ -94,13 +90,6 @@ export class RecipientModule {
     return response
   }
 
-  public async requestKeylist(connection: ConnectionRecord) {
-    const message = this.recipientService.createKeylistQuery()
-    const outboundMessage = createOutboundMessage(connection, message)
-    const response = await this.messageSender.sendMessage(outboundMessage)
-    return response
-  }
-
   public async findByConnectionId(connectionId: string) {
     return await this.recipientService.findByConnectionId(connectionId)
   }
@@ -124,7 +113,7 @@ export class RecipientModule {
   }
 
   public async requestAndAwaitGrant(connection: ConnectionRecord, timeoutMs = 10000): Promise<MediationRecord> {
-    const [mediationRecord, message] = await this.recipientService.createRequest(connection)
+    const { mediationRecord, message } = await this.recipientService.createRequest(connection)
 
     // Create observable for event
     const observable = this.eventEmitter.observable<MediationStateChangedEvent>(RoutingEventTypes.MediationStateChanged)

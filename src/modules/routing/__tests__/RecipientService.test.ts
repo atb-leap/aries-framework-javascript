@@ -78,7 +78,6 @@ describe('Recipient', () => {
       assert(recipientService.getMediators, 'Expected RecipientService to have a `getMediators` method')
       assert(recipientService.clearDefaultMediator, 'Expected RecipientService to have a `clearDefaultMediator` method')
       assert(recipientService.findByConnectionId, 'Expected RecipientService to have a `findByConnectionId` method')
-      assert(recipientService.findById, 'Expected RecipientService to have a `findById` method')
       assert(recipientService.processMediationDeny, 'Expected RecipientService to have a `processMediationDeny` method')
       assert(
         recipientService.processMediationGrant,
@@ -88,7 +87,6 @@ describe('Recipient', () => {
         recipientService.processKeylistUpdateResults,
         'Expected RecipientService to have a `processKeylistUpdateResults` method'
       )
-      assert(recipientService.createKeylistQuery, 'Expected RecipientService to have a `createKeylistQuery` method')
       assert(recipientService.createRequest, 'Expected RecipientService to have a `createRequest` method')
       //assert(service.createRecord, 'Expected RecipientService to have a `createRecord` method')
     })

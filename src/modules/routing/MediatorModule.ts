@@ -60,7 +60,7 @@ export class MediatorModule {
 
   private registerHandlers(dispatcher: Dispatcher) {
     dispatcher.registerHandler(new KeylistUpdateHandler(this.mediatorService))
-    dispatcher.registerHandler(new ForwardHandler(this.mediatorService))
+    dispatcher.registerHandler(new ForwardHandler(this.mediatorService, this.connectionService, this.messageSender))
     dispatcher.registerHandler(new BatchPickupHandler(this.messagePickupService))
     dispatcher.registerHandler(new BatchHandler(this.eventEmitter))
     dispatcher.registerHandler(new MediationRequestHandler(this.mediatorService, this.agentConfig))
