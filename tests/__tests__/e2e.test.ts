@@ -1,8 +1,14 @@
-import { DefaultMediatorPollingInboundTransporter, MediationRecord } from '../../src'
+import type { MediationRecord } from '../../src'
 
 import WebSocket from 'ws'
 
-import { HttpOutboundTransporter, Agent, MediationState, WsOutboundTransporter } from '../../src'
+import {
+  DefaultMediatorPollingInboundTransporter,
+  HttpOutboundTransporter,
+  Agent,
+  MediationState,
+  WsOutboundTransporter,
+} from '../../src'
 import {
   closeAndDeleteWallet,
   getBaseConfig,
