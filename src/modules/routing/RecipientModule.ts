@@ -12,9 +12,9 @@ import { Dispatcher } from '../../agent/Dispatcher'
 import { EventEmitter } from '../../agent/EventEmitter'
 import { MessageSender } from '../../agent/MessageSender'
 import { createOutboundMessage } from '../../agent/helpers'
-import { ReturnRouteTypes } from '../../decorators/transport/TransportDecorator'
 import { ConnectionService } from '../connections/services'
 
+import { MediatorPickupStrategy } from './MediatorPickupStrategy'
 import { RoutingEventTypes } from './RoutingEvents'
 import { KeylistUpdateResponseHandler } from './handlers/KeylistUpdateResponseHandler'
 import { MediationDenyHandler } from './handlers/MediationDenyHandler'
@@ -63,8 +63,17 @@ export class RecipientModule {
     // Poll for messages from mediator
     const defaultMediatorConnection = await this.findDefaultMediatorConnection()
     if (defaultMediatorConnection) {
-      // TODO: stop polling on agent shutdown (need shutdown event)
-      this.pollPickupMessages(defaultMediatorConnection, this.agentConfig.mediatorPollingInterval)
+      // Explicit means polling every X seconds with batch message
+      if (this.agentConfig.mediatorPickupStrategy === MediatorPickupStrategy.Explicit) {
+        // TODO: stop polling on agent shutdown (need shutdown event)
+        this.pollPickupMessages(defaultMediatorConnection, this.agentConfig.mediatorPollingInterval)
+      }
+      // Implicit means sending ping once and keeping connection open. This requires a long-lived transport
+      // such as WebSockets to work
+      else {
+        const { message, connectionRecord } = await this.connectionService.createTrustPing(defaultMediatorConnection.id)
+        this.messageSender.sendMessage(createOutboundMessage(connectionRecord, message))
+      }
     }
   }
 

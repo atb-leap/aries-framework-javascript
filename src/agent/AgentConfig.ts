@@ -3,6 +3,7 @@ import type { InitConfig } from '../types'
 
 import { DID_COMM_TRANSPORT_QUEUE } from '../constants'
 import { ConsoleLogger, LogLevel } from '../logger'
+import { MediatorPickupStrategy } from '../modules/routing/MediatorPickupStrategy'
 import { DidCommMimeType } from '../types'
 
 export class AgentConfig {
@@ -60,6 +61,10 @@ export class AgentConfig {
 
   public get mediatorPollingInterval() {
     return this.initConfig.mediatorPollingInterval ?? 5000
+  }
+
+  public get mediatorPickupStrategy() {
+    return this.initConfig.mediatorPickupStrategy ?? MediatorPickupStrategy.Explicit
   }
 
   public getEndpoint() {
