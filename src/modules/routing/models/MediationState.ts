@@ -4,14 +4,7 @@
  * @see https://github.com/hyperledger/aries-rfcs/tree/master/features/0211-route-coordination/README.md
  */
 export enum MediationState {
-  Init = 'init',
   Requested = 'requested',
   Granted = 'granted',
   Denied = 'denied',
-}
-export enum KeylistState {
-  Init = 'init',
-  Update = 'update',
-  Updated = 'updated',
-  Listed = 'listed',
 }

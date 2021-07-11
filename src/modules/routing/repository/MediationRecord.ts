@@ -55,7 +55,7 @@ export class MediationRecord
       this.threadId = props.threadId
       this.recipientKeys = props.recipientKeys || []
       this.routingKeys = props.routingKeys || []
-      this.state = props.state || MediationState.Init
+      this.state = props.state
       this.role = props.role
       this.endpoint = props.endpoint ?? undefined
     }

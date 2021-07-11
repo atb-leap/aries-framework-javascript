@@ -16,6 +16,7 @@ const recipientConfig = getBaseConfig('recipient')
 const mediatorConfig = getBaseConfig('mediator', {
   host: 'http://localhost',
   port: 3002,
+  autoAcceptMediationRequests: true,
 })
 
 describe('mediator establishment', () => {
@@ -39,7 +40,7 @@ describe('mediator establishment', () => {
     await mediatorAgent.inboundTransporter?.stop()
   })
 
-  test('recipient and mediator establish a connection and granted mediation', async () => {
+  test('recipient and mediator establish a connection and granted mediation with HTTP', async () => {
     await makeTransport({ agent: recipientAgent, outboundTransporter: new HttpOutboundTransporter(recipientAgent) })
     await makeTransport({
       agent: mediatorAgent,
@@ -54,10 +55,7 @@ describe('mediator establishment', () => {
     expect(recipientAgentConnection).toBeConnectedWith(mediatorAgentConnection)
     expect(mediatorAgentConnection).toBeConnectedWith(recipientAgentConnection)
     expect(mediatorAgentConnection.isReady)
-    console.log('mediatorAgent connection is ready!')
-    const mediationRecord: MediationRecord = await recipientAgent.mediationRecipient.requestAndAwaitGrant(
-      recipientAgentConnection
-    )
+    const mediationRecord = await recipientAgent.mediationRecipient.requestAndAwaitGrant(recipientAgentConnection)
     expect(mediationRecord.state).toBe(MediationState.Granted)
   })
 
@@ -82,9 +80,7 @@ describe('mediator establishment', () => {
     expect(mediatorAgentConnection).toBeConnectedWith(recipientAgentConnection)
     expect(mediatorAgentConnection.isReady)
 
-    const mediationRecord: MediationRecord = await recipientAgent.mediationRecipient.requestAndAwaitGrant(
-      recipientAgentConnection
-    )
+    const mediationRecord = await recipientAgent.mediationRecipient.requestAndAwaitGrant(recipientAgentConnection)
     expect(mediationRecord.state).toBe(MediationState.Granted)
   })
 })

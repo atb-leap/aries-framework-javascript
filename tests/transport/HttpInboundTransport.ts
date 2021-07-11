@@ -1,14 +1,19 @@
 import type { InboundTransporter, Agent, OutboundPackage } from '../../src'
 import type { TransportSession } from '../../src/agent/TransportService'
 import type { Express, Request, Response } from 'express'
+import type { Server } from 'http'
 
 import { AriesFrameworkError } from '../../src'
-import logger from '../../src/__tests__/logger'
+import testLogger from '../../src/__tests__/logger'
+import { AgentConfig } from '../../src/agent/AgentConfig'
 import { TransportService } from '../../src/agent/TransportService'
 import { uuid } from '../../src/utils/uuid'
 
+const logger = testLogger
+
 export class HttpInboundTransporter implements InboundTransporter {
   private app: Express
+  private server?: Server
 
   public constructor(app: Express) {
     this.app = app
@@ -16,6 +21,8 @@ export class HttpInboundTransporter implements InboundTransporter {
 
   public async start(agent: Agent) {
     const transportService = agent.injectionContainer.resolve(TransportService)
+    const config = agent.injectionContainer.resolve(AgentConfig)
+    this.server = this.app.listen(config.port)
 
     this.app.post('/msg', async (req, res) => {
       const session = new HttpTransportSession(uuid(), req, res)
@@ -29,7 +36,7 @@ export class HttpInboundTransporter implements InboundTransporter {
           res.status(200).end()
         }
       } catch (error) {
-        logger.error(`Error processing message in mediator: ${error.message}`, error)
+        logger.error(`Error processing inbound message: ${error.message}`, error)
         res.status(500).send('Error processing message')
       } finally {
         transportService.removeSession(session)
@@ -38,7 +45,7 @@ export class HttpInboundTransporter implements InboundTransporter {
   }
 
   public async stop(): Promise<void> {
-    // TODO: stop server (need server to do that)
+    this.server?.close()
   }
 }
 

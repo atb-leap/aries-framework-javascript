@@ -157,7 +157,7 @@ export class MediatorService {
     const mediationRecord = new MediationRecord({
       connectionId: connection.id,
       role: MediationRole.Mediator,
-      state: MediationState.Init,
+      state: MediationState.Requested,
       threadId: messageContext.message.threadId,
     })
 
@@ -169,8 +169,6 @@ export class MediatorService {
         previousState: null,
       },
     })
-
-    await this.updateState(mediationRecord, MediationState.Init)
 
     return mediationRecord
   }

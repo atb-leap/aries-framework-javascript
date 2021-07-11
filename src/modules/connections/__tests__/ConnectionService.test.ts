@@ -233,12 +233,7 @@ describe('ConnectionService', () => {
       )
     })
 
-    const invalidConnectionStates = [
-      ConnectionState.Init,
-      ConnectionState.Requested,
-      ConnectionState.Responded,
-      ConnectionState.Complete,
-    ]
+    const invalidConnectionStates = [ConnectionState.Requested, ConnectionState.Responded, ConnectionState.Complete]
     test.each(invalidConnectionStates)(
       `throws an error when connection state is %s and not ${ConnectionState.Invited}`,
       (state) => {
@@ -420,12 +415,7 @@ describe('ConnectionService', () => {
       )
     })
 
-    const invalidConnectionStates = [
-      ConnectionState.Init,
-      ConnectionState.Invited,
-      ConnectionState.Responded,
-      ConnectionState.Complete,
-    ]
+    const invalidConnectionStates = [ConnectionState.Invited, ConnectionState.Responded, ConnectionState.Complete]
     test.each(invalidConnectionStates)(
       `throws an error when connection state is %s and not ${ConnectionState.Requested}`,
       async (state) => {
@@ -640,7 +630,7 @@ describe('ConnectionService', () => {
       expect(message).toEqual(expect.any(TrustPingMessage))
     })
 
-    const invalidConnectionStates = [ConnectionState.Init, ConnectionState.Invited, ConnectionState.Requested]
+    const invalidConnectionStates = [ConnectionState.Invited, ConnectionState.Requested]
     test.each(invalidConnectionStates)(
       `throws an error when connection state is %s and not ${ConnectionState.Responded} or ${ConnectionState.Complete}`,
       (state) => {

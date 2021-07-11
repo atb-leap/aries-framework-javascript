@@ -12,8 +12,12 @@ import {
   closeAndDeleteWallet,
 } from './helpers'
 
-const aliceConfig = getBaseConfig('Agents Alice')
-const bobConfig = getBaseConfig('Agents Bob')
+const aliceConfig = getBaseConfig('Agents Alice', {
+  endpoint: 'rxjs:subject',
+})
+const bobConfig = getBaseConfig('Agents Bob', {
+  endpoint: 'rxjs:subject',
+})
 
 describe('agents', () => {
   let aliceAgent: Agent

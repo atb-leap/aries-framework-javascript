@@ -43,7 +43,7 @@ describe('Recipient', () => {
   describe('MediationRecord test', () => {
     it('validates mediation record class', () => {
       const record = new MediationRecord({
-        state: MediationState.Init,
+        state: MediationState.Requested,
         role: MediationRole.Recipient,
         threadId: 'fakeThreadId',
         connectionId: 'fakeConnectionId',
