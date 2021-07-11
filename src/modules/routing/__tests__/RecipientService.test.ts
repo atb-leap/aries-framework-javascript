@@ -27,7 +27,7 @@ describe('Recipient', () => {
   beforeAll(async () => {
     agentConfig = new AgentConfig(initConfig)
     wallet = new IndyWallet(agentConfig)
-    await wallet.init()
+    await wallet.initialize(initConfig.walletConfig!, initConfig.walletCredentials!)
   })
 
   afterAll(async () => {

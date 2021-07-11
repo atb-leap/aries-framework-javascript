@@ -53,13 +53,13 @@ describe('ConnectionService', () => {
     eventEmitter = new EventEmitter()
     connectionRepository = new ConnectionRepositoryMock()
     connectionService = new ConnectionService(wallet, agentConfig, connectionRepository, eventEmitter)
-    myRouting =  { did: "fakeDid", verkey: "fakeVerkey", endpoint: agentConfig.getEndpoint(), routingKeys: [] }
+    myRouting = { did: 'fakeDid', verkey: 'fakeVerkey', endpoint: agentConfig.getEndpoint(), routingKeys: [] }
   })
 
   describe('createConnectionWithInvitation', () => {
     it('returns a connection record with values set', async () => {
       expect.assertions(7)
-      const { connectionRecord: connectionRecord } = await connectionService.createInvitation({ ...myRouting })
+      const { connectionRecord: connectionRecord } = await connectionService.createInvitation({ routing: myRouting })
 
       expect(connectionRecord.type).toBe('ConnectionRecord')
       expect(connectionRecord.role).toBe(ConnectionRole.Inviter)
@@ -77,7 +77,7 @@ describe('ConnectionService', () => {
     it('returns a connection record with invitation', async () => {
       expect.assertions(1)
 
-      const { message: invitation } = await connectionService.createInvitation({ ...myRouting })
+      const { message: invitation } = await connectionService.createInvitation({ routing: myRouting })
 
       expect(invitation).toEqual(
         expect.objectContaining({
@@ -94,7 +94,7 @@ describe('ConnectionService', () => {
 
       const saveSpy = jest.spyOn(connectionRepository, 'save')
 
-      await connectionService.createInvitation({ ...myRouting })
+      await connectionService.createInvitation({ routing: myRouting })
 
       expect(saveSpy).toHaveBeenCalledWith(expect.any(ConnectionRecord))
     })
@@ -104,13 +104,13 @@ describe('ConnectionService', () => {
 
       const { connectionRecord: connectionTrue } = await connectionService.createInvitation({
         autoAcceptConnection: true,
-        ...myRouting,
+        routing: myRouting,
       })
       const { connectionRecord: connectionFalse } = await connectionService.createInvitation({
         autoAcceptConnection: false,
-        ...myRouting,
+        routing: myRouting,
       })
-      const { connectionRecord: connectionUndefined } = await connectionService.createInvitation({ ...myRouting })
+      const { connectionRecord: connectionUndefined } = await connectionService.createInvitation({ routing: myRouting })
 
       expect(connectionTrue.autoAcceptConnection).toBe(true)
       expect(connectionFalse.autoAcceptConnection).toBe(false)
@@ -122,9 +122,9 @@ describe('ConnectionService', () => {
 
       const { connectionRecord: aliasDefined } = await connectionService.createInvitation({
         alias: 'test-alias',
-        ...myRouting,
+        routing: myRouting,
       })
-      const { connectionRecord: aliasUndefined } = await connectionService.createInvitation({ ...myRouting })
+      const { connectionRecord: aliasUndefined } = await connectionService.createInvitation({ routing: myRouting })
 
       expect(aliasDefined.alias).toBe('test-alias')
       expect(aliasUndefined.alias).toBeUndefined()
@@ -142,10 +142,10 @@ describe('ConnectionService', () => {
         serviceEndpoint: 'https://test.com/msg',
       })
 
-      const connection = await connectionService.processInvitation(invitation, { ...myRouting })
+      const connection = await connectionService.processInvitation(invitation, { routing: myRouting })
       const connectionAlias = await connectionService.processInvitation(invitation, {
         alias: 'test-alias',
-        ...myRouting,
+        routing: myRouting,
       })
 
       expect(connection.role).toBe(ConnectionRole.Invitee)
@@ -175,13 +175,13 @@ describe('ConnectionService', () => {
 
       const connectionTrue = await connectionService.processInvitation(invitation, {
         autoAcceptConnection: true,
-        ...myRouting,
+        routing: myRouting,
       })
       const connectionFalse = await connectionService.processInvitation(invitation, {
         autoAcceptConnection: false,
-        ...myRouting,
+        routing: myRouting,
       })
-      const connectionUndefined = await connectionService.processInvitation(invitation, { ...myRouting })
+      const connectionUndefined = await connectionService.processInvitation(invitation, { routing: myRouting })
 
       expect(connectionTrue.autoAcceptConnection).toBe(true)
       expect(connectionFalse.autoAcceptConnection).toBe(false)
@@ -196,8 +196,11 @@ describe('ConnectionService', () => {
         label: 'test label',
       })
 
-      const aliasDefined = await connectionService.processInvitation(invitation, { alias: 'test-alias', ...myRouting })
-      const aliasUndefined = await connectionService.processInvitation(invitation, { ...myRouting })
+      const aliasDefined = await connectionService.processInvitation(invitation, {
+        alias: 'test-alias',
+        routing: myRouting,
+      })
+      const aliasUndefined = await connectionService.processInvitation(invitation, { routing: myRouting })
 
       expect(aliasDefined.alias).toBe('test-alias')
       expect(aliasUndefined.alias).toBeUndefined()

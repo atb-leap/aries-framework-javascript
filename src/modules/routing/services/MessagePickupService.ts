@@ -30,7 +30,6 @@ export class MessagePickupService {
     const connection = messageContext.assertReadyConnection()
 
     const { message } = messageContext
-
     const messages = this.messageRepository.takeFromQueue(connection.id, message.batchSize)
 
     // TODO: each message should be stored with an id. to be able to conform to the id property
@@ -50,6 +49,6 @@ export class MessagePickupService {
   }
 
   public queueMessage(theirKey: string, message: WireMessage) {
-    this.messageRepository.save(theirKey, message)
+    this.messageRepository.add(theirKey, message)
   }
 }
