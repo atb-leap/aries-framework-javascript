@@ -12,6 +12,7 @@ import { MessageRepository } from '../storage/MessageRepository'
 
 import { EnvelopeService } from './EnvelopeService'
 import { TransportService } from './TransportService'
+import { isUnpackedPackedMessage } from './helpers'
 
 @scoped(Lifecycle.ContainerScoped)
 export class MessageSender {
@@ -47,38 +48,44 @@ export class MessageSender {
     return { connection, payload: wireMessage }
   }
 
-  public async sendMessage(outboundMessage: OutboundMessage) {
+  public async sendMessage(outboundMessage: OutboundMessage | OutboundPackage) {
     if (!this.outboundTransporter) {
       throw new AriesFrameworkError('Agent has no outbound transporter!')
     }
 
-    const { connection, payload } = outboundMessage
+    const { connection } = outboundMessage
     const { id, verkey, theirKey } = connection
-    const message = payload.toJSON()
     this.logger.debug('Send outbound message', {
-      messageId: message.id,
       connection: { id, verkey, theirKey },
     })
 
+    const threadId = isUnpackedPackedMessage(outboundMessage) ? outboundMessage.payload.threadId : undefined
+
     // Try sending over already open connection
     const session = this.transportService.findSessionByConnectionId(connection.id)
-    if (session?.inboundMessage?.hasReturnRouting(outboundMessage.payload.threadId)) {
+    if (session?.inboundMessage?.hasReturnRouting(threadId)) {
       this.logger.debug(`Existing ${session.type} transport session has been found.`)
       try {
-        if (!session.keys) {
-          throw new AriesFrameworkError(`There are no keys for the given ${session.type} transport session.`)
+        let outboundPackage: OutboundPackage
+
+        // If outboundPackage is instance of AgentMessage we still need to pack
+        if (isUnpackedPackedMessage(outboundMessage)) {
+          if (!session.keys) {
+            throw new AriesFrameworkError(`There are no keys for the given ${session.type} transport session.`)
+          }
+          outboundPackage = await this.packMessage(outboundMessage, session.keys)
         }
-        const outboundPackage = await this.packMessage(outboundMessage, session.keys)
+        // Otherwise we use the message that is already packed. This is often not the case
+        // but happens with forwarding packed message
+        else {
+          outboundPackage = outboundMessage
+        }
+
         await session.send(outboundPackage)
         return
       } catch (error) {
         this.logger.info(`Sending an outbound message via session failed with error: ${error.message}.`, error)
       }
-    }
-
-    // Set return routing for message if we don't have an inbound endpoint for this connection
-    if (!this.transportService.hasInboundEndpoint(outboundMessage.connection.didDoc)) {
-      outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
     }
 
     const services = this.transportService.findDidCommServices(connection)
@@ -92,16 +99,30 @@ export class MessageSender {
         continue
       }
 
-      this.logger.debug(`Preparing outbound message to service:`, { messageId: message.id, service })
+      this.logger.debug(`Sending outbound message to service:`, { connectionId: connection.id, service })
       try {
-        const keys = {
-          recipientKeys: service.recipientKeys,
-          routingKeys: service.routingKeys || [],
-          senderKey: connection.verkey,
+        let outboundPackage: OutboundPackage
+
+        // If outboundPackage is instance of AgentMessage we still need to pack
+        if (isUnpackedPackedMessage(outboundMessage)) {
+          const keys = {
+            recipientKeys: service.recipientKeys,
+            routingKeys: service.routingKeys || [],
+            senderKey: connection.verkey,
+          }
+
+          // Set return routing for message if we don't have an inbound endpoint for this connection
+          if (!this.transportService.hasInboundEndpoint(outboundMessage.connection.didDoc)) {
+            outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
+          }
+
+          outboundPackage = await this.packMessage(outboundMessage, keys)
+          outboundPackage.responseRequested = outboundMessage.payload.hasReturnRouting()
+        } else {
+          outboundPackage = outboundMessage
         }
-        const outboundPackage = await this.packMessage(outboundMessage, keys)
+
         outboundPackage.endpoint = service.serviceEndpoint
-        outboundPackage.responseRequested = outboundMessage.payload.hasReturnRouting()
         await this.outboundTransporter.sendMessage(outboundPackage)
 
         return
@@ -119,8 +140,14 @@ export class MessageSender {
     // We didn't succeed to send the message over open session, or directly to serviceEndpoint
     // If the other party shared a queue service endpoint in their did doc we queue the message
     const { theirDidDoc } = outboundMessage.connection
-    if (theirDidDoc && this.transportService.hasInboundEndpoint(theirDidDoc)) {
-      // FIXME: this currently adds unpacked message to queue. It expects packed message
+    if (
+      theirDidDoc &&
+      this.transportService.hasInboundEndpoint(theirDidDoc) &&
+      // FIXME: we can't currently add unpacked message to the queue. This is good for now
+      // as forward messages are always packed. Allowing unpacked messages means
+      // we can queue undeliverable messages
+      !isUnpackedPackedMessage(outboundMessage)
+    ) {
       this.messageRepository.add(outboundMessage.connection.id, outboundMessage.payload)
     }
   }

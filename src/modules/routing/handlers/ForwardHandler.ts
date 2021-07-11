@@ -3,7 +3,6 @@ import type { MessageSender } from '../../../agent/MessageSender'
 import type { ConnectionService } from '../../connections/services'
 import type { MediatorService } from '../services'
 
-import { createOutboundMessage } from '../../../agent/helpers'
 import { ForwardMessage } from '../messages'
 
 export class ForwardHandler implements Handler {
@@ -28,10 +27,8 @@ export class ForwardHandler implements Handler {
 
     const connectionRecord = await this.connectionService.getById(mediationRecord.connectionId)
 
-    // FIXME: the message inside the forward message is packed, which the current API does not support
-    // We've been re-sending the received forward message until now, but this is incorrect.
-    // createOutboundMessage / sendMessage should be able to handle a WireMessage / JsonWebKey
-    const outbound = createOutboundMessage(connectionRecord, messageContext.message)
-    await this.messageSender.sendMessage(outbound)
+    // The message inside the forward message is packed so we just send the packed
+    // message to the connection associated with it
+    await this.messageSender.sendMessage({ connection: connectionRecord, payload: packedMessage })
   }
 }

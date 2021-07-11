@@ -54,8 +54,8 @@ export class MediatorModule {
     return mediationRecord
   }
 
-  public queueMessage(theirKey: string, message: WireMessage) {
-    return this.messagePickupService.queueMessage(theirKey, message)
+  public queueMessage(connectionId: string, message: WireMessage) {
+    return this.messagePickupService.queueMessage(connectionId, message)
   }
 
   private registerHandlers(dispatcher: Dispatcher) {

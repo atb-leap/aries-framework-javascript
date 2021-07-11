@@ -48,7 +48,7 @@ export class MessagePickupService {
     return createOutboundMessage(connection, batchMessage)
   }
 
-  public queueMessage(theirKey: string, message: WireMessage) {
-    this.messageRepository.add(theirKey, message)
+  public queueMessage(connectionId: string, message: WireMessage) {
+    this.messageRepository.add(connectionId, message)
   }
 }
