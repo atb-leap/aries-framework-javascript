@@ -1,6 +1,5 @@
 import type { Logger } from '../logger'
 import type { CredentialsModule } from '../modules/credentials/CredentialsModule'
-import type { MessageRepository } from '../storage/MessageRepository'
 import type { InboundTransporter } from '../transport/InboundTransporter'
 import type { OutboundTransporter } from '../transport/OutboundTransporter'
 import type { InitConfig } from '../types'
@@ -182,10 +181,6 @@ export class Agent {
 
   public get publicDid() {
     return this.wallet.publicDid
-  }
-
-  public get port() {
-    return this.agentConfig.port
   }
 
   public async receiveMessage(inboundPackedMessage: unknown, session?: TransportSession) {
