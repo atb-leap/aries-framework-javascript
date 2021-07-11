@@ -31,7 +31,6 @@ describe('Recipient', () => {
   })
 
   afterAll(async () => {
-    await wallet.close()
     await wallet.delete()
   })
 

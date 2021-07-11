@@ -46,6 +46,7 @@ export function getBaseConfig(name: string, extraConfig: Partial<InitConfig> = {
     walletConfig: { id: `Wallet: ${name}` },
     walletCredentials: { key: `Key: ${name}` },
     publicDidSeed,
+    endpoint: 'rxjs:subject',
     autoAcceptConnections: true,
     poolName: `pool-${name.toLowerCase()}`,
     logger: testLogger,

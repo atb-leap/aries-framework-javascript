@@ -57,6 +57,8 @@ export class MessageSender {
     const { id, verkey, theirKey } = connection
     this.logger.debug('Send outbound message', {
       connection: { id, verkey, theirKey },
+      isUnpackedMessage: isUnpackedPackedMessage(outboundMessage),
+      messageType: isUnpackedPackedMessage(outboundMessage) ? outboundMessage.payload.type : 'unknown',
     })
 
     const threadId = isUnpackedPackedMessage(outboundMessage) ? outboundMessage.payload.threadId : undefined
@@ -93,9 +95,14 @@ export class MessageSender {
       throw new AriesFrameworkError(`Connection with id ${connection.id} has no service!`)
     }
 
+    this.logger.debug(`Found ${services.length} services for message to connection '${connection.id}'`)
+
     for await (const service of services) {
       // We can't send message to didcomm:transport/queue
       if (service.serviceEndpoint === DID_COMM_TRANSPORT_QUEUE) {
+        this.logger.debug(`Skipping transport queue service for connection '${connection.id}'`, {
+          service,
+        })
         continue
       }
 

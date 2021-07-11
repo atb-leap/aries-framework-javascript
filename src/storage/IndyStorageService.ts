@@ -1,6 +1,6 @@
 import type { BaseRecord, TagsBase } from './BaseRecord'
 import type { StorageService, BaseRecordConstructor } from './StorageService'
-import type { WalletQuery, WalletRecord } from 'indy-sdk'
+import type { WalletRecord } from 'indy-sdk'
 
 import { inject, scoped, Lifecycle } from 'tsyringe'
 
@@ -182,8 +182,17 @@ export class IndyStorageService<T extends BaseRecord> implements StorageService<
   }
 
   /** @inheritDoc {StorageService#findByQuery} */
-  public async findByQuery(recordClass: BaseRecordConstructor<T>, query: WalletQuery): Promise<T[]> {
-    const recordIterator = await this.wallet.search(recordClass.type, query, IndyStorageService.DEFAULT_QUERY_OPTIONS)
+  public async findByQuery(
+    recordClass: BaseRecordConstructor<T>,
+    query: Partial<ReturnType<T['getTags']>>
+  ): Promise<T[]> {
+    const indyQuery = this.transformFromRecordTagValues(query as unknown as TagsBase)
+
+    const recordIterator = await this.wallet.search(
+      recordClass.type,
+      indyQuery,
+      IndyStorageService.DEFAULT_QUERY_OPTIONS
+    )
     const records = []
     for await (const record of recordIterator) {
       records.push(this.recordToInstance(record, recordClass))

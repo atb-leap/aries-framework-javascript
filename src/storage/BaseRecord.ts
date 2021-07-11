@@ -7,6 +7,7 @@ export type TagsBase = {
 }
 
 export type Tags<DefaultTags extends TagsBase, CustomTags extends TagsBase> = CustomTags & DefaultTags
+export type RecordTags<Record extends BaseRecord> = ReturnType<Record['getTags']>
 
 export abstract class BaseRecord<DefaultTags extends TagsBase = TagsBase, CustomTags extends TagsBase = TagsBase> {
   @Exclude()

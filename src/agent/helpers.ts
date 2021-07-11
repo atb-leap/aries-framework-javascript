@@ -16,5 +16,5 @@ export function createOutboundMessage<T extends AgentMessage = AgentMessage>(
 export function isUnpackedPackedMessage(
   outboundMessage: OutboundMessage | OutboundPackage
 ): outboundMessage is OutboundMessage {
-  return outboundMessage instanceof AgentMessage
+  return outboundMessage.payload instanceof AgentMessage
 }
