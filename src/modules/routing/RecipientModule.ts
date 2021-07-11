@@ -3,7 +3,7 @@ import type { MediationStateChangedEvent } from './RoutingEvents'
 import type { MediationRecord } from './index'
 import type { Verkey } from 'indy-sdk'
 
-import { firstValueFrom, ReplaySubject } from 'rxjs'
+import { firstValueFrom, interval, ReplaySubject } from 'rxjs'
 import { filter, first, timeout } from 'rxjs/operators'
 import { Lifecycle, scoped } from 'tsyringe'
 
@@ -59,16 +59,32 @@ export class RecipientModule {
     else if (clearDefaultMediator) {
       await this.recipientService.clearDefaultMediator()
     }
+
+    // Poll for messages from mediator
+    const defaultMediatorConnection = await this.findDefaultMediatorConnection()
+    if (defaultMediatorConnection) {
+      // TODO: stop polling on agent shutdown (need shutdown event)
+      this.pollPickupMessages(defaultMediatorConnection, this.agentConfig.mediatorPollingInterval)
+    }
   }
 
   public async discoverMediation() {
     return this.recipientService.discoverMediation()
   }
 
-  public async downloadMessages(mediatorConnection: ConnectionRecord) {
+  public async pollPickupMessages(mediatorConnection: ConnectionRecord, intervalMs: number) {
+    const subscription = interval(intervalMs).subscribe(async () => {
+      await this.pickupMessages(mediatorConnection)
+    })
+
+    return subscription
+  }
+
+  public async pickupMessages(mediatorConnection: ConnectionRecord) {
+    mediatorConnection.assertReady()
+
     const batchPickupMessage = new BatchPickupMessage({ batchSize: 10 })
     const outboundMessage = createOutboundMessage(mediatorConnection, batchPickupMessage)
-    outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
     await this.messageSender.sendMessage(outboundMessage)
   }
 

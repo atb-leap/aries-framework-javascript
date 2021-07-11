@@ -54,7 +54,7 @@ export class Agent {
   public readonly mediationRecipient!: RecipientModule
   public readonly mediator!: MediatorModule
 
-  public constructor(initialConfig: InitConfig, messageRepository?: MessageRepository) {
+  public constructor(initialConfig: InitConfig) {
     // Create child container so we don't interfere with anything outside of this agent
     this.container = baseContainer.createChildContainer()
 
@@ -69,16 +69,10 @@ export class Agent {
     this.container.registerInstance(InjectionSymbols.Indy, this.agentConfig.indy)
     this.container.register(InjectionSymbols.Wallet, { useToken: IndyWallet })
     this.container.registerSingleton(InjectionSymbols.StorageService, IndyStorageService)
+    this.container.registerSingleton(InjectionSymbols.MessageRepository, InMemoryMessageRepository)
 
     // File system differs based on NodeJS / React Native
     this.container.registerInstance(InjectionSymbols.FileSystem, this.agentConfig.fileSystem)
-
-    // TODO: do not make messageRepository input parameter
-    if (messageRepository) {
-      this.container.registerInstance(InjectionSymbols.MessageRepository, messageRepository)
-    } else {
-      this.container.registerSingleton(InjectionSymbols.MessageRepository, InMemoryMessageRepository)
-    }
 
     this.logger.info('Creating agent with config', {
       ...initialConfig,

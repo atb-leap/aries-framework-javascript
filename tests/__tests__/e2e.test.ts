@@ -2,13 +2,7 @@ import type { MediationRecord } from '../../src'
 
 import WebSocket from 'ws'
 
-import {
-  DefaultMediatorPollingInboundTransporter,
-  HttpOutboundTransporter,
-  Agent,
-  MediationState,
-  WsOutboundTransporter,
-} from '../../src'
+import { HttpOutboundTransporter, Agent, MediationState, WsOutboundTransporter } from '../../src'
 import {
   closeAndDeleteWallet,
   getBaseConfig,
@@ -16,7 +10,6 @@ import {
   makeInBoundTransporter,
   makeTransport,
 } from '../../src/__tests__/helpers'
-import { InMemoryMessageRepository } from '../../src/storage/InMemoryMessageRepository'
 import { WsInboundTransporter } from '../transport/WsInboundTransport'
 
 const recipientConfig = getBaseConfig('recipient')
@@ -31,7 +24,7 @@ describe('mediator establishment', () => {
 
   beforeEach(async () => {
     recipientAgent = new Agent(recipientConfig)
-    mediatorAgent = new Agent(mediatorConfig, new InMemoryMessageRepository())
+    mediatorAgent = new Agent(mediatorConfig)
   })
 
   afterEach(async () => {
@@ -47,12 +40,12 @@ describe('mediator establishment', () => {
   })
 
   test('recipient and mediator establish a connection and granted mediation', async () => {
-    await makeTransport(
-      recipientAgent,
-      new DefaultMediatorPollingInboundTransporter(),
-      new HttpOutboundTransporter(recipientAgent)
-    )
-    await makeTransport(mediatorAgent, makeInBoundTransporter(), new HttpOutboundTransporter(mediatorAgent))
+    await makeTransport({ agent: recipientAgent, outboundTransporter: new HttpOutboundTransporter(recipientAgent) })
+    await makeTransport({
+      agent: mediatorAgent,
+      inboundTransporter: makeInBoundTransporter(),
+      outboundTransporter: new HttpOutboundTransporter(mediatorAgent),
+    })
 
     const { agentAConnection: mediatorAgentConnection, agentBConnection: recipientAgentConnection } =
       await makeConnection(mediatorAgent, recipientAgent, {
@@ -69,19 +62,17 @@ describe('mediator establishment', () => {
   })
 
   test('recipient and mediator establish a connection and granted mediation with WebSockets', async () => {
-    const recipientSocketServer = new WebSocket.Server({ noServer: true })
-    await makeTransport(
-      recipientAgent,
-      new WsInboundTransporter(recipientSocketServer),
-      new WsOutboundTransporter(recipientAgent)
-    )
+    await makeTransport({
+      agent: recipientAgent,
+      outboundTransporter: new WsOutboundTransporter(recipientAgent),
+    })
 
     const mediatorSocketServer = new WebSocket.Server({ noServer: false, port: 3002 })
-    await makeTransport(
-      mediatorAgent,
-      new WsInboundTransporter(mediatorSocketServer),
-      new WsOutboundTransporter(mediatorAgent)
-    )
+    await makeTransport({
+      agent: mediatorAgent,
+      inboundTransporter: new WsInboundTransporter(mediatorSocketServer),
+      outboundTransporter: new WsOutboundTransporter(mediatorAgent),
+    })
 
     const { agentAConnection: mediatorAgentConnection, agentBConnection: recipientAgentConnection } =
       await makeConnection(mediatorAgent, recipientAgent, {

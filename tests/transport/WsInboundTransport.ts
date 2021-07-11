@@ -1,8 +1,11 @@
-import { Agent, AriesFrameworkError, InboundTransporter, OutboundPackage } from '../../src'
-import WebSocket from 'ws'
-import { TransportService, TransportSession } from '../../src/agent/TransportService'
+import type { Agent, InboundTransporter, OutboundPackage } from '../../src'
+import type { TransportSession } from '../../src/agent/TransportService'
 
+import WebSocket from 'ws'
+
+import { AriesFrameworkError } from '../../src'
 import logger from '../../src/__tests__/logger'
+import { TransportService } from '../../src/agent/TransportService'
 
 export class WsInboundTransporter implements InboundTransporter {
   private socketServer: WebSocket.Server
@@ -39,7 +42,13 @@ export class WsInboundTransporter implements InboundTransporter {
     logger.debug('Closing WebSocket Server')
 
     return new Promise<void>((resolve, reject) => {
-      this.socketServer.close((err) => (err ? reject(err) : resolve()))
+      this.socketServer.close((error) => {
+        if (error) {
+          reject(error)
+        }
+
+        resolve()
+      })
     })
   }
 

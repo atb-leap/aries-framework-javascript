@@ -39,6 +39,7 @@ export interface InitConfig {
   mediatorConnectionsInvite?: string
   defaultMediatorId?: string
   clearDefaultMediator?: boolean
+  mediatorPollingInterval?: number
 }
 
 export interface UnpackedMessage {

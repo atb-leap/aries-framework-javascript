@@ -9,14 +9,14 @@ import type { InboundTransporter, OutboundTransporter } from '../transport'
 import type { InitConfig, OutboundPackage, WireMessage } from '../types'
 import type { Wallet } from '../wallet/Wallet'
 import type { CredDef, Did, Schema } from 'indy-sdk'
-import type { Subject } from 'rxjs'
+import type { Subject, Subscription } from 'rxjs'
 
 import cors from 'cors'
 import express from 'express'
 import indy from 'indy-sdk'
 import path from 'path'
 
-import { HttpInboundTransporter } from '../../tests/mediator'
+import { HttpInboundTransporter } from '../../tests/transport/HttpInboundTransport'
 import { InjectionSymbols } from '../constants'
 import { BasicMessageEventTypes } from '../modules/basic-messages'
 import {
@@ -156,6 +156,7 @@ class SubjectTransportSession implements TransportSession {
 export class SubjectInboundTransporter implements InboundTransporter {
   private subject: Subject<WireMessage>
   private theirSubject: Subject<WireMessage>
+  private subscription?: Subscription
 
   public constructor(subject: Subject<WireMessage>, theirSubject: Subject<WireMessage>) {
     this.subject = subject
@@ -166,8 +167,12 @@ export class SubjectInboundTransporter implements InboundTransporter {
     this.subscribe(agent)
   }
 
+  public async stop() {
+    this.subscription?.unsubscribe()
+  }
+
   private subscribe(agent: Agent) {
-    this.subject.subscribe({
+    this.subscription = this.subject.subscribe({
       next: async (message: WireMessage) => {
         const session = new SubjectTransportSession('subject-session-1', this.theirSubject)
         await agent.receiveMessage(message, session)
@@ -276,13 +281,17 @@ export async function makeConnection(
   }
 }
 
-export async function makeTransport(
-  agent: Agent,
-  inboundTransporter: InboundTransporter,
-  outboundTransporter: OutboundTransporter
-) {
-  agent.setInboundTransporter(inboundTransporter)
-  agent.setOutboundTransporter(outboundTransporter)
+export async function makeTransport({
+  agent,
+  inboundTransporter,
+  outboundTransporter,
+}: {
+  agent: Agent
+  outboundTransporter?: OutboundTransporter
+  inboundTransporter?: InboundTransporter
+}) {
+  if (inboundTransporter) agent.setInboundTransporter(inboundTransporter)
+  if (outboundTransporter) agent.setOutboundTransporter(outboundTransporter)
   await agent.initialize()
 }
 

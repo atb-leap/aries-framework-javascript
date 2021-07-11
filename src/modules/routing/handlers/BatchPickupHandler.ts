@@ -16,6 +16,7 @@ export class BatchPickupHandler implements Handler {
     if (!messageContext.connection) {
       throw new AriesFrameworkError(`Connection for verkey ${messageContext.recipientVerkey} not found!`)
     }
-    return this.messagePickupService.batch(messageContext.connection)
+
+    return this.messagePickupService.batch(messageContext)
   }
 }

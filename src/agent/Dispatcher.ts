@@ -36,9 +36,6 @@ class Dispatcher {
     const outboundMessage = await handler.handle(messageContext)
 
     if (outboundMessage) {
-      if (!this.transportService.hasInboundEndpoint(outboundMessage.connection)) {
-        outboundMessage.payload.setReturnRouting(ReturnRouteTypes.all)
-      }
       await this.messageSender.sendMessage(outboundMessage)
     }
   }

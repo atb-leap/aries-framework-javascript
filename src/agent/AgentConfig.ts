@@ -58,6 +58,10 @@ export class AgentConfig {
     return this.initConfig.didCommMimeType ?? DidCommMimeType.V0
   }
 
+  public get mediatorPollingInterval() {
+    return this.initConfig.mediatorPollingInterval ?? 5000
+  }
+
   public getEndpoint() {
     // Otherwise we check if an endpoint is set
     if (this.initConfig.endpoint) return `${this.initConfig.endpoint}/msg`

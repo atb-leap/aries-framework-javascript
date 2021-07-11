@@ -1,7 +1,8 @@
-import { InboundTransporter, Agent, OutboundPackage, AriesFrameworkError } from '../../src'
+import type { InboundTransporter, Agent, OutboundPackage } from '../../src'
 import type { TransportSession } from '../../src/agent/TransportService'
 import type { Express, Request, Response } from 'express'
 
+import { AriesFrameworkError } from '../../src'
 import logger from '../../src/__tests__/logger'
 import { TransportService } from '../../src/agent/TransportService'
 import { uuid } from '../../src/utils/uuid'
