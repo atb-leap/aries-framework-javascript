@@ -61,32 +61,36 @@ export class RecipientModule {
     }
 
     // Poll for messages from mediator
-    const defaultMediatorConnection = await this.findDefaultMediatorConnection()
-    if (defaultMediatorConnection) {
-      // Explicit means polling every X seconds with batch message
-      if (this.agentConfig.mediatorPickupStrategy === MediatorPickupStrategy.Explicit) {
-        // TODO: stop polling on agent shutdown (need shutdown event)
-        this.pollPickupMessages(defaultMediatorConnection, this.agentConfig.mediatorPollingInterval)
-      }
-      // Implicit means sending ping once and keeping connection open. This requires a long-lived transport
-      // such as WebSockets to work
-      else {
-        const { message, connectionRecord } = await this.connectionService.createTrustPing(defaultMediatorConnection.id)
-        this.messageSender.sendMessage(createOutboundMessage(connectionRecord, message))
-      }
+    const defaultMediator = await this.findDefaultMediator()
+    if (defaultMediator) {
+      await this.initiateMessagePickup(defaultMediator)
+    }
+  }
+
+  public async initiateMessagePickup(mediator: MediationRecord) {
+    const { mediatorPickupStrategy, mediatorPollingInterval } = this.agentConfig
+
+    const mediatorConnection = await this.connectionService.getById(mediator.connectionId)
+
+    // Explicit means polling every X seconds with batch message
+    if (mediatorPickupStrategy === MediatorPickupStrategy.Explicit) {
+      const subscription = interval(mediatorPollingInterval).subscribe(async () => {
+        await this.pickupMessages(mediatorConnection)
+      })
+
+      return subscription
+    }
+
+    // Implicit means sending ping once and keeping connection open. This requires a long-lived transport
+    // such as WebSockets to work
+    else if (mediatorPickupStrategy === MediatorPickupStrategy.Implicit) {
+      const { message, connectionRecord } = await this.connectionService.createTrustPing(mediatorConnection.id)
+      await this.messageSender.sendMessage(createOutboundMessage(connectionRecord, message))
     }
   }
 
   public async discoverMediation() {
     return this.recipientService.discoverMediation()
-  }
-
-  public async pollPickupMessages(mediatorConnection: ConnectionRecord, intervalMs: number) {
-    const subscription = interval(intervalMs).subscribe(async () => {
-      await this.pickupMessages(mediatorConnection)
-    })
-
-    return subscription
   }
 
   public async pickupMessages(mediatorConnection: ConnectionRecord) {
