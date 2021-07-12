@@ -3,15 +3,16 @@ import type { MediationStateChangedEvent } from './RoutingEvents'
 import type { MediationRecord } from './index'
 import type { Verkey } from 'indy-sdk'
 
-import { firstValueFrom, interval, ReplaySubject } from 'rxjs'
-import { filter, first, timeout } from 'rxjs/operators'
-import { Lifecycle, scoped } from 'tsyringe'
+import { firstValueFrom, interval, ReplaySubject, Subject } from 'rxjs'
+import { filter, first, takeUntil, timeout } from 'rxjs/operators'
+import { inject, Lifecycle, scoped } from 'tsyringe'
 
 import { AgentConfig } from '../../agent/AgentConfig'
 import { Dispatcher } from '../../agent/Dispatcher'
 import { EventEmitter } from '../../agent/EventEmitter'
 import { MessageSender } from '../../agent/MessageSender'
 import { createOutboundMessage } from '../../agent/helpers'
+import { InjectionSymbols } from '../../constants'
 import { ConnectionService } from '../connections/services'
 
 import { MediatorPickupStrategy } from './MediatorPickupStrategy'
@@ -30,6 +31,7 @@ export class RecipientModule {
   private connectionService: ConnectionService
   private messageSender: MessageSender
   private eventEmitter: EventEmitter
+  private $stop: Subject<boolean>
 
   public constructor(
     dispatcher: Dispatcher,
@@ -37,7 +39,8 @@ export class RecipientModule {
     recipientService: RecipientService,
     connectionService: ConnectionService,
     messageSender: MessageSender,
-    eventEmitter: EventEmitter
+    eventEmitter: EventEmitter,
+    @inject(InjectionSymbols.$Stop) $stop: Subject<boolean>
   ) {
     this.agentConfig = agentConfig
     this.connectionService = connectionService
@@ -45,6 +48,7 @@ export class RecipientModule {
     this.messageSender = messageSender
     this.eventEmitter = eventEmitter
     this.registerHandlers(dispatcher)
+    this.$stop = $stop
   }
 
   public async initialize() {
@@ -54,7 +58,6 @@ export class RecipientModule {
     if (defaultMediatorId) {
       const mediatorRecord = await this.recipientService.getById(defaultMediatorId)
       await this.recipientService.setDefaultMediator(mediatorRecord)
-      await this.initiateMessagePickup(mediatorRecord)
     }
     // Clear the stored default mediator
     else if (clearDefaultMediator) {
@@ -76,9 +79,11 @@ export class RecipientModule {
     // Explicit means polling every X seconds with batch message
     if (mediatorPickupStrategy === MediatorPickupStrategy.Explicit) {
       this.agentConfig.logger.info(`Starting explicit (batch) pickup of messages from mediator '${mediator.id}'`)
-      const subscription = interval(mediatorPollingInterval).subscribe(async () => {
-        await this.pickupMessages(mediatorConnection)
-      })
+      const subscription = interval(mediatorPollingInterval)
+        .pipe(takeUntil(this.$stop))
+        .subscribe(async () => {
+          await this.pickupMessages(mediatorConnection)
+        })
 
       return subscription
     }

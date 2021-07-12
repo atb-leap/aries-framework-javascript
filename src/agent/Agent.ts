@@ -9,7 +9,8 @@ import type { TransportSession } from './TransportService'
 import type { Subscription } from 'rxjs'
 import type { DependencyContainer } from 'tsyringe'
 
-import { concatMap } from 'rxjs/operators'
+import { Subject } from 'rxjs'
+import { concatMap, takeUntil } from 'rxjs/operators'
 import { container as baseContainer } from 'tsyringe'
 
 import { InjectionSymbols } from '../constants'
@@ -63,6 +64,10 @@ export class Agent {
     // Bind class based instances
     this.container.registerInstance(AgentConfig, this.agentConfig)
 
+    // $stop is used for agent shutdown signal
+    const $stop = new Subject<boolean>()
+    this.container.registerInstance(InjectionSymbols.$Stop, $stop)
+
     // Based on interfaces. Need to register which class to use
     this.container.registerInstance(InjectionSymbols.Logger, this.logger)
     this.container.registerInstance(InjectionSymbols.Indy, this.agentConfig.indy)
@@ -107,7 +112,10 @@ export class Agent {
     // Listen for new messages (either from transports or somewhere else in the framework / extensions)
     this.messageSubscription = this.eventEmitter
       .observable<AgentMessageReceivedEvent>(AgentEventTypes.AgentMessageReceived)
-      .pipe(concatMap((e) => this.messageReceiver.receiveMessage(e.payload.message)))
+      .pipe(
+        takeUntil($stop),
+        concatMap((e) => this.messageReceiver.receiveMessage(e.payload.message))
+      )
       .subscribe()
   }
 
@@ -172,12 +180,31 @@ export class Agent {
       connectionRecord = await this.connections.returnWhenIsConnected(connectionRecord.id)
       const mediationRecord = await this.mediationRecipient.requestAndAwaitGrant(connectionRecord, 60000) // TODO: put timeout as a config parameter
       await this.mediationRecipient.setDefaultMediator(mediationRecord)
-      await this.mediationRecipient.initiateMessagePickup(mediationRecord)
     }
 
     await this.mediationRecipient.initialize()
 
     this._isInitialized = true
+  }
+
+  public async shutdown({ deleteWallet = false }: { deleteWallet?: boolean } = {}) {
+    // Stop transports
+    await this.outboundTransporter?.stop()
+    await this.inboundTransporter?.stop()
+
+    // close/delete wallet if still initialized
+    if (this.wallet.isInitialized) {
+      if (deleteWallet) {
+        await this.wallet.delete()
+      } else {
+        await this.wallet.close()
+      }
+    }
+
+    // All observables use takeUntil with the $stop observable
+    // this means all observables will stop running if a value is emitted on this observable
+    const $stop = this.container.resolve<Subject<boolean>>(InjectionSymbols.$Stop)
+    $stop.next(true)
   }
 
   public get publicDid() {

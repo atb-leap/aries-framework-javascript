@@ -79,13 +79,13 @@ export class AgentConfig {
 
   public getEndpoint() {
     // Otherwise we check if an endpoint is set
-    if (this.initConfig.endpoint) return `${this.initConfig.endpoint}/msg`
+    if (this.initConfig.endpoint) return this.initConfig.endpoint
 
     // Otherwise we'll try to construct it from the host/port
     let hostEndpoint = this.initConfig.host
     if (hostEndpoint) {
       if (this.initConfig.port) hostEndpoint += `:${this.initConfig.port}`
-      return `${hostEndpoint}/msg`
+      return hostEndpoint
     }
 
     // If we still don't have an endpoint, return didcomm:transport/queue

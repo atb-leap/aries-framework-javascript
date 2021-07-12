@@ -1,5 +1,3 @@
-import type { MediationRecord } from '../../src'
-
 import WebSocket from 'ws'
 
 import { HttpOutboundTransporter, Agent, MediationState, WsOutboundTransporter } from '../../src'
@@ -7,7 +5,7 @@ import {
   closeAndDeleteWallet,
   getBaseConfig,
   makeConnection,
-  makeInBoundTransporter,
+  makeHttpInBoundTransporter,
   makeTransport,
 } from '../../src/__tests__/helpers'
 import { WsInboundTransporter } from '../transport/WsInboundTransport'
@@ -44,7 +42,7 @@ describe('mediator establishment', () => {
     await makeTransport({ agent: recipientAgent, outboundTransporter: new HttpOutboundTransporter(recipientAgent) })
     await makeTransport({
       agent: mediatorAgent,
-      inboundTransporter: makeInBoundTransporter(),
+      inboundTransporter: makeHttpInBoundTransporter(),
       outboundTransporter: new HttpOutboundTransporter(mediatorAgent),
     })
 

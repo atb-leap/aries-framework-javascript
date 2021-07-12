@@ -48,9 +48,6 @@ export class MediatorService {
   public async processForwardMessage(
     messageContext: InboundMessageContext<ForwardMessage>
   ): Promise<{ mediationRecord: MediationRecord; packedMessage: WireMessage }> {
-    // Assert Ready connection
-    messageContext.assertReadyConnection()
-
     const { message } = messageContext
 
     // TODO: update to class-validator validation

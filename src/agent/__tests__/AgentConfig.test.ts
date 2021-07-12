@@ -3,7 +3,7 @@ import { AgentConfig } from '../AgentConfig'
 
 describe('AgentConfig', () => {
   describe('getEndpoint', () => {
-    it('should return the config endpoint + /msg if no inbound connection is available', () => {
+    it('should return the config endpoint if no inbound connection is available', () => {
       const endpoint = 'https://local-url.com'
 
       const agentConfig = new AgentConfig(
@@ -12,10 +12,10 @@ describe('AgentConfig', () => {
         })
       )
 
-      expect(agentConfig.getEndpoint()).toBe(endpoint + '/msg')
+      expect(agentConfig.getEndpoint()).toBe(endpoint)
     })
 
-    it('should return the config host + /msg if no inbound connection or config endpoint is available', () => {
+    it('should return the config host if no inbound connection or config endpoint is available', () => {
       const host = 'https://local-url.com'
       const port = '3001'
 
@@ -26,10 +26,10 @@ describe('AgentConfig', () => {
         })
       )
 
-      expect(agentConfig.getEndpoint()).toBe(host + ':' + port + '/msg')
+      expect(agentConfig.getEndpoint()).toBe(host + ':' + port)
     })
 
-    it('should return the config host and port + /msg if no inbound connection or config endpoint is available', () => {
+    it('should return the config host and port if no inbound connection or config endpoint is available', () => {
       const host = 'https://local-url.com'
       const port = 8080
 
@@ -40,11 +40,11 @@ describe('AgentConfig', () => {
         })
       )
 
-      expect(agentConfig.getEndpoint()).toBe(`${host}:${port}/msg`)
+      expect(agentConfig.getEndpoint()).toBe(`${host}:${port}`)
     })
 
     // added because on first implementation this is what it did. Never again!
-    it('should return the endpoint + /msg without port if the endpoint and port are available', () => {
+    it('should return the endpoint without port if the endpoint and port are available', () => {
       const endpoint = 'https://local-url.com'
       const port = 8080
 
@@ -55,7 +55,7 @@ describe('AgentConfig', () => {
         })
       )
 
-      expect(agentConfig.getEndpoint()).toBe(`${endpoint}/msg`)
+      expect(agentConfig.getEndpoint()).toBe(`${endpoint}`)
     })
 
     it("should return 'didcomm:transport/queue' if no inbound connection or config endpoint or host/port is available", () => {

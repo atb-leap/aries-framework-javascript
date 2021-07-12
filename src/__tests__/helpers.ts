@@ -1,15 +1,13 @@
 import type { Agent } from '../agent/Agent'
-import type { TransportSession } from '../agent/TransportService'
 import type { BasicMessage, BasicMessageReceivedEvent } from '../modules/basic-messages'
 import type { ConnectionRecordProps } from '../modules/connections'
 import type { CredentialRecord, CredentialOfferTemplate, CredentialStateChangedEvent } from '../modules/credentials'
 import type { SchemaTemplate, CredentialDefinitionTemplate } from '../modules/ledger'
 import type { ProofRecord, ProofState, ProofStateChangedEvent } from '../modules/proofs'
 import type { InboundTransporter, OutboundTransporter } from '../transport'
-import type { InitConfig, OutboundPackage, WireMessage } from '../types'
+import type { InitConfig } from '../types'
 import type { Wallet } from '../wallet/Wallet'
 import type { CredDef, Did, Schema } from 'indy-sdk'
-import type { Subject, Subscription } from 'rxjs'
 
 import cors from 'cors'
 import express from 'express'
@@ -18,6 +16,7 @@ import path from 'path'
 
 import { HttpInboundTransporter } from '../../tests/transport/HttpInboundTransport'
 import { InjectionSymbols } from '../constants'
+import { LogLevel } from '../logger/Logger'
 import { BasicMessageEventTypes } from '../modules/basic-messages'
 import {
   ConnectionInvitationMessage,
@@ -32,7 +31,7 @@ import { ProofEventTypes } from '../modules/proofs'
 import { NodeFileSystem } from '../storage/fs/NodeFileSystem'
 import { DidCommMimeType } from '../types'
 
-import testLogger from './logger'
+import testLogger, { TestLogger } from './logger'
 
 export const genesisPath = process.env.GENESIS_TXN_PATH
   ? path.resolve(process.env.GENESIS_TXN_PATH)
@@ -48,7 +47,7 @@ export function getBaseConfig(name: string, extraConfig: Partial<InitConfig> = {
     publicDidSeed,
     autoAcceptConnections: true,
     poolName: `pool-${name.toLowerCase()}`,
-    logger: testLogger,
+    logger: new TestLogger(LogLevel.error, name),
     indy,
     fileSystem: new NodeFileSystem(),
     ...extraConfig,
@@ -135,74 +134,6 @@ export async function waitForBasicMessage(agent: Agent, { content }: { content?:
 
     agent.events.on<BasicMessageReceivedEvent>(BasicMessageEventTypes.BasicMessageReceived, listener)
   })
-}
-
-class SubjectTransportSession implements TransportSession {
-  public id: string
-  public readonly type = 'subject'
-  private theirSubject: Subject<WireMessage>
-
-  public constructor(id: string, theirSubject: Subject<WireMessage>) {
-    this.id = id
-    this.theirSubject = theirSubject
-  }
-
-  public send(outboundMessage: OutboundPackage): Promise<void> {
-    this.theirSubject.next(outboundMessage.payload)
-    return Promise.resolve()
-  }
-}
-
-export class SubjectInboundTransporter implements InboundTransporter {
-  private subject: Subject<WireMessage>
-  private theirSubject: Subject<WireMessage>
-  private subscription?: Subscription
-
-  public constructor(subject: Subject<WireMessage>, theirSubject: Subject<WireMessage>) {
-    this.subject = subject
-    this.theirSubject = theirSubject
-  }
-
-  public async start(agent: Agent) {
-    this.subscribe(agent)
-  }
-
-  public async stop() {
-    this.subscription?.unsubscribe()
-  }
-
-  private subscribe(agent: Agent) {
-    this.subscription = this.subject.subscribe({
-      next: async (message: WireMessage) => {
-        const session = new SubjectTransportSession('subject-session-1', this.theirSubject)
-        await agent.receiveMessage(message, session)
-      },
-    })
-  }
-}
-
-export class SubjectOutboundTransporter implements OutboundTransporter {
-  private subject: Subject<WireMessage>
-
-  public supportedSchemes = []
-
-  public constructor(subject: Subject<WireMessage>) {
-    this.subject = subject
-  }
-
-  public async start(): Promise<void> {
-    // Nothing required to start
-  }
-
-  public async stop(): Promise<void> {
-    // Nothing required to stop
-  }
-
-  public async sendMessage(outboundPackage: OutboundPackage) {
-    testLogger.test(`Sending outbound message to connection ${outboundPackage.connection.id}`)
-    const { payload } = outboundPackage
-    this.subject.next(payload)
-  }
 }
 
 export function getMockConnection({
@@ -295,7 +226,7 @@ export async function makeTransport({
   await agent.initialize()
 }
 
-export function makeInBoundTransporter() {
+export function makeHttpInBoundTransporter(path = '/') {
   const app = express()
   app.use(cors())
   app.use(express.json())
@@ -305,7 +236,7 @@ export function makeInBoundTransporter() {
     })
   )
   app.set('json spaces', 2)
-  return new HttpInboundTransporter(app)
+  return new HttpInboundTransporter(app, path)
 }
 
 export async function registerSchema(agent: Agent, schemaTemplate: SchemaTemplate): Promise<Schema> {

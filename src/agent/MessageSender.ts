@@ -58,6 +58,7 @@ export class MessageSender {
     this.logger.debug('Send outbound message', {
       connection: { id, verkey, theirKey },
       isUnpackedMessage: isUnpackedPackedMessage(outboundMessage),
+      message: outboundMessage.payload,
       messageType: isUnpackedPackedMessage(outboundMessage) ? outboundMessage.payload.type : 'unknown',
     })
 

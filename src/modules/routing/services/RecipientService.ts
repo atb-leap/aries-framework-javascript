@@ -165,7 +165,7 @@ export class RecipientService {
       routingKeys = [...routingKeys, ...mediationRecord.routingKeys]
       endpoint = mediationRecord.endpoint ?? endpoint
       // new did has been created and mediator needs to be updated with the public key.
-      mediationRecord = await this.keylistUpdateAndAwait(mediationRecord, did)
+      mediationRecord = await this.keylistUpdateAndAwait(mediationRecord, verkey)
     } else {
       // TODO: check that recipient keys are in wallet
     }

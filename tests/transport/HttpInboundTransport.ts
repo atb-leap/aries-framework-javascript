@@ -14,9 +14,11 @@ const logger = testLogger
 export class HttpInboundTransporter implements InboundTransporter {
   private app: Express
   private server?: Server
+  private path: string
 
-  public constructor(app: Express) {
+  public constructor(app: Express, path: string) {
     this.app = app
+    this.path = path
   }
 
   public async start(agent: Agent) {
@@ -24,7 +26,7 @@ export class HttpInboundTransporter implements InboundTransporter {
     const config = agent.injectionContainer.resolve(AgentConfig)
     this.server = this.app.listen(config.port)
 
-    this.app.post('/msg', async (req, res) => {
+    this.app.post(this.path, async (req, res) => {
       const session = new HttpTransportSession(uuid(), req, res)
       try {
         const message = req.body
