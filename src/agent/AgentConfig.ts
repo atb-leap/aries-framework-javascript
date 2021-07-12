@@ -2,6 +2,7 @@ import type { Logger } from '../logger'
 import type { InitConfig } from '../types'
 
 import { DID_COMM_TRANSPORT_QUEUE } from '../constants'
+import { AriesFrameworkError } from '../error'
 import { ConsoleLogger, LogLevel } from '../logger'
 import { MediatorPickupStrategy } from '../modules/routing/MediatorPickupStrategy'
 import { DidCommMimeType } from '../types'
@@ -13,6 +14,15 @@ export class AgentConfig {
   public constructor(initConfig: InitConfig) {
     this.initConfig = initConfig
     this.logger = initConfig.logger ?? new ConsoleLogger(LogLevel.off)
+
+    const { mediatorConnectionsInvite, clearDefaultMediator, defaultMediatorId } = this.initConfig
+
+    const allowOne = [mediatorConnectionsInvite, clearDefaultMediator, defaultMediatorId].filter((e) => e !== undefined)
+    if (allowOne.length > 1) {
+      throw new AriesFrameworkError(
+        `Only one of 'mediatorConnectionsInvite', 'clearDefaultMediator' and 'defaultMediatorId' can be set as they negate each other`
+      )
+    }
   }
 
   public get indy() {

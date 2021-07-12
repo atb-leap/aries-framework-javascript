@@ -172,6 +172,7 @@ export class Agent {
       connectionRecord = await this.connections.returnWhenIsConnected(connectionRecord.id)
       const mediationRecord = await this.mediationRecipient.requestAndAwaitGrant(connectionRecord, 60000) // TODO: put timeout as a config parameter
       await this.mediationRecipient.setDefaultMediator(mediationRecord)
+      await this.mediationRecipient.initiateMessagePickup(mediationRecord)
     }
 
     await this.mediationRecipient.initialize()

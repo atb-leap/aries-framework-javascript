@@ -54,6 +54,7 @@ export class RecipientModule {
     if (defaultMediatorId) {
       const mediatorRecord = await this.recipientService.getById(defaultMediatorId)
       await this.recipientService.setDefaultMediator(mediatorRecord)
+      await this.initiateMessagePickup(mediatorRecord)
     }
     // Clear the stored default mediator
     else if (clearDefaultMediator) {
@@ -74,6 +75,7 @@ export class RecipientModule {
 
     // Explicit means polling every X seconds with batch message
     if (mediatorPickupStrategy === MediatorPickupStrategy.Explicit) {
+      this.agentConfig.logger.info(`Starting explicit (batch) pickup of messages from mediator '${mediator.id}'`)
       const subscription = interval(mediatorPollingInterval).subscribe(async () => {
         await this.pickupMessages(mediatorConnection)
       })
@@ -84,8 +86,13 @@ export class RecipientModule {
     // Implicit means sending ping once and keeping connection open. This requires a long-lived transport
     // such as WebSockets to work
     else if (mediatorPickupStrategy === MediatorPickupStrategy.Implicit) {
+      this.agentConfig.logger.info(`Starting implicit pickup of messages from mediator '${mediator.id}'`)
       const { message, connectionRecord } = await this.connectionService.createTrustPing(mediatorConnection.id)
       await this.messageSender.sendMessage(createOutboundMessage(connectionRecord, message))
+    } else {
+      this.agentConfig.logger.info(
+        `Skipping pickup of messages from mediator '${mediator.id}' due to pickup strategy none`
+      )
     }
   }
 
