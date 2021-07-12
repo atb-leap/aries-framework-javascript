@@ -1,4 +1,5 @@
 import type { InboundMessageContext } from '../../../agent/models/InboundMessageContext'
+import type { WireMessage } from '../../../types'
 import type { MediationStateChangedEvent } from '../RoutingEvents'
 import type { ForwardMessage, KeylistUpdateMessage, MediationRequestMessage } from '../messages'
 import type { Verkey } from 'indy-sdk'
@@ -46,7 +47,7 @@ export class MediatorService {
 
   public async processForwardMessage(
     messageContext: InboundMessageContext<ForwardMessage>
-  ): Promise<{ mediationRecord: MediationRecord; packedMessage: JsonWebKey }> {
+  ): Promise<{ mediationRecord: MediationRecord; packedMessage: WireMessage }> {
     // Assert Ready connection
     messageContext.assertReadyConnection()
 

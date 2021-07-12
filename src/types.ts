@@ -6,7 +6,10 @@ import type { MediatorPickupStrategy } from './modules/routing'
 import type { FileSystem } from './storage/fs/FileSystem'
 import type { default as Indy, WalletConfig, WalletCredentials, Verkey } from 'indy-sdk'
 
-export type WireMessage = JsonWebKey
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type $FixMe = any
+
+export type WireMessage = $FixMe
 
 export enum DidCommMimeType {
   V0 = 'application/ssi-agent-wire',
@@ -51,6 +54,8 @@ export interface UnpackedMessageContext {
   sender_verkey?: Verkey
   recipient_verkey?: Verkey
 }
+
+export type PackedMessage = Record<string, unknown>
 
 export interface OutboundMessage<T extends AgentMessage = AgentMessage> {
   connection: ConnectionRecord

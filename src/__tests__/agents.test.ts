@@ -1,4 +1,5 @@
 import type { ConnectionRecord } from '../modules/connections'
+import type { WireMessage } from '../types'
 
 import { Subject } from 'rxjs'
 
@@ -31,8 +32,8 @@ describe('agents', () => {
   })
 
   test('make a connection between agents', async () => {
-    const aliceMessages = new Subject<JsonWebKey>()
-    const bobMessages = new Subject<JsonWebKey>()
+    const aliceMessages = new Subject<WireMessage>()
+    const bobMessages = new Subject<WireMessage>()
 
     aliceAgent = new Agent(aliceConfig)
     aliceAgent.setInboundTransporter(new SubjectInboundTransporter(aliceMessages, bobMessages))
