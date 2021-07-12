@@ -13,11 +13,8 @@ export class MediationRepository extends Repository<MediationRecord> {
   }
 
   public getSingleByRecipientKey(recipientKey: string) {
-    // TODO: would be nice if the query method could automatically handle arrays
-    const tag = `recipientKey:${recipientKey}`
-
     return this.getSingleByQuery({
-      [tag]: true,
+      recipientKeys: [recipientKey],
     })
   }
 
