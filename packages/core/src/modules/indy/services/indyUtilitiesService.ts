@@ -7,9 +7,11 @@ import { scoped, Lifecycle } from 'tsyringe'
 
 import { AgentConfig } from '../../../agent/AgentConfig'
 import { getDirFromFilePath } from '../../../utils/path'
+import { AriesFrameworkError, IndySdkError } from 'packages/core/src/error'
+import { isIndyError } from 'packages/core/src/utils/indyError'
 
 @scoped(Lifecycle.ContainerScoped)
-export class IndyUtilitesService {
+export class IndyUtilitiesService {
   private indy: typeof Indy
   private logger: Logger
   private fileSystem: FileSystem
@@ -27,23 +29,31 @@ export class IndyUtilitesService {
    * @returns The blob storage reader handle
    */
   public async createTailsReader(tailsFilePath: string): Promise<BlobReaderHandle> {
-    this.logger.debug(`Opening tails reader at path ${tailsFilePath}`)
-    const tailsFileExists = await this.fileSystem.exists(tailsFilePath)
+    try {
+      this.logger.debug(`Opening tails reader at path ${tailsFilePath}`)
+      const tailsFileExists = await this.fileSystem.exists(tailsFilePath)
 
-    // Extract directory from path (should also work with windows paths)
-    const dirname = getDirFromFilePath(tailsFilePath)
+      // Extract directory from path (should also work with windows paths)
+      const dirname = getDirFromFilePath(tailsFilePath)
 
-    if (!tailsFileExists) {
-      throw new Error(`Tails file does not exist at path ${tailsFilePath}`)
+      if (!tailsFileExists) {
+        throw new AriesFrameworkError(`Tails file does not exist at path ${tailsFilePath}`)
+      }
+
+      const tailsReaderConfig = {
+        base_dir: dirname,
+      }
+
+      const tailsReader = await this.indy.openBlobStorageReader('default', tailsReaderConfig)
+      this.logger.debug(`Opened tails reader at path ${tailsFilePath}`)
+      return tailsReader
+    } catch (error) {
+      if (isIndyError(error)) {
+        throw new IndySdkError(error)
+      }
+
+      throw error
     }
-
-    const tailsReaderConfig = {
-      base_dir: dirname,
-    }
-
-    const tailsReader = await this.indy.openBlobStorageReader('default', tailsReaderConfig)
-    this.logger.debug(`Opened tails reader at path ${tailsFilePath}`)
-    return tailsReader
   }
 
   public async downloadTails(hash: string, tailsLocation: string): Promise<BlobReaderHandle> {
