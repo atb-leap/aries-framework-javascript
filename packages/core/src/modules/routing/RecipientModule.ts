@@ -139,7 +139,7 @@ export class RecipientModule {
         // Increase the interval (recursive back-off)
         tap(() => (interval *= 2)),
         // Wait for interval time before reconnecting
-        delay(interval)
+        delayWhen(() => timer(interval))
       )
       .subscribe(async () => {
         this.logger.warn(
