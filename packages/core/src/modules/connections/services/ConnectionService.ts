@@ -3,6 +3,7 @@ import type { InboundMessageContext } from '../../../agent/models/InboundMessage
 import type { Logger } from '../../../logger'
 import type { AckMessage } from '../../common'
 import type { ConnectionStateChangedEvent } from '../ConnectionEvents'
+import type { ConnectionProblemReportMessage } from '../messages'
 import type { CustomConnectionTags } from '../repository/ConnectionRecord'
 
 import { firstValueFrom, ReplaySubject } from 'rxjs'
@@ -18,6 +19,7 @@ import { JsonTransformer } from '../../../utils/JsonTransformer'
 import { MessageValidator } from '../../../utils/MessageValidator'
 import { Wallet } from '../../../wallet/Wallet'
 import { ConnectionEventTypes } from '../ConnectionEvents'
+import { ConnectionProblemReportError, ConnectionProblemReportReason } from '../errors'
 import {
   ConnectionInvitationMessage,
   ConnectionRequestMessage,
@@ -70,6 +72,8 @@ export class ConnectionService {
     autoAcceptConnection?: boolean
     alias?: string
     multiUseInvitation?: boolean
+    myLabel?: string
+    myImageUrl?: string
   }): Promise<ConnectionProtocolMsgReturnType<ConnectionInvitationMessage>> {
     // TODO: public did
     const connectionRecord = await this.createConnection({
@@ -80,15 +84,14 @@ export class ConnectionService {
       autoAcceptConnection: config?.autoAcceptConnection,
       multiUseInvitation: config.multiUseInvitation ?? false,
     })
-
     const { didDoc } = connectionRecord
     const [service] = didDoc.didCommServices
     const invitation = new ConnectionInvitationMessage({
-      label: this.config.label,
+      label: config?.myLabel ?? this.config.label,
       recipientKeys: service.recipientKeys,
       serviceEndpoint: service.serviceEndpoint,
       routingKeys: service.routingKeys,
-      imageUrl: this.config.connectionImageUrl,
+      imageUrl: config?.myImageUrl ?? this.config.connectionImageUrl,
     })
 
     connectionRecord.invitation = invitation
@@ -153,21 +156,36 @@ export class ConnectionService {
    * Create a connection request message for the connection with the specified connection id.
    *
    * @param connectionId the id of the connection for which to create a connection request
+   * @param config config for creation of connection request
    * @returns outbound message containing connection request
    */
-  public async createRequest(connectionId: string): Promise<ConnectionProtocolMsgReturnType<ConnectionRequestMessage>> {
+  public async createRequest(
+    connectionId: string,
+    config: {
+      myLabel?: string
+      myImageUrl?: string
+      autoAcceptConnection?: boolean
+    } = {}
+  ): Promise<ConnectionProtocolMsgReturnType<ConnectionRequestMessage>> {
     const connectionRecord = await this.connectionRepository.getById(connectionId)
 
     connectionRecord.assertState(ConnectionState.Invited)
     connectionRecord.assertRole(ConnectionRole.Invitee)
 
+    const { myLabel, myImageUrl, autoAcceptConnection } = config
+
     const connectionRequest = new ConnectionRequestMessage({
-      label: this.config.label,
+      label: myLabel ?? this.config.label,
       did: connectionRecord.did,
       didDoc: connectionRecord.didDoc,
-      imageUrl: this.config.connectionImageUrl,
+      imageUrl: myImageUrl ?? this.config.connectionImageUrl,
     })
 
+    if (autoAcceptConnection !== undefined || autoAcceptConnection !== null) {
+      connectionRecord.autoAcceptConnection = config?.autoAcceptConnection
+    }
+
+    connectionRecord.autoAcceptConnection = config?.autoAcceptConnection
     await this.updateState(connectionRecord, ConnectionState.Requested)
 
     return {
@@ -205,7 +223,9 @@ export class ConnectionService {
     connectionRecord.assertRole(ConnectionRole.Inviter)
 
     if (!message.connection.didDoc) {
-      throw new AriesFrameworkError('Public DIDs are not supported yet')
+      throw new ConnectionProblemReportError('Public DIDs are not supported yet', {
+        problemCode: ConnectionProblemReportReason.RequestNotAccepted,
+      })
     }
 
     // Create new connection if using a multi use invitation
@@ -312,7 +332,16 @@ export class ConnectionService {
     connectionRecord.assertState(ConnectionState.Requested)
     connectionRecord.assertRole(ConnectionRole.Invitee)
 
-    const connectionJson = await unpackAndVerifySignatureDecorator(message.connectionSig, this.wallet)
+    let connectionJson = null
+    try {
+      connectionJson = await unpackAndVerifySignatureDecorator(message.connectionSig, this.wallet)
+    } catch (error) {
+      if (error instanceof AriesFrameworkError) {
+        throw new ConnectionProblemReportError(error.message, {
+          problemCode: ConnectionProblemReportReason.RequestProcessingError,
+        })
+      }
+    }
 
     const connection = JsonTransformer.fromJSON(connectionJson, Connection)
     await MessageValidator.validate(connection)
@@ -322,8 +351,9 @@ export class ConnectionService {
     const signerVerkey = message.connectionSig.signer
     const invitationKey = connectionRecord.getTags().invitationKey
     if (signerVerkey !== invitationKey) {
-      throw new AriesFrameworkError(
-        `Connection object in connection response message is not signed with same key as recipient key in invitation expected='${invitationKey}' received='${signerVerkey}'`
+      throw new ConnectionProblemReportError(
+        `Connection object in connection response message is not signed with same key as recipient key in invitation expected='${invitationKey}' received='${signerVerkey}'`,
+        { problemCode: ConnectionProblemReportReason.ResponseNotAccepted }
       )
     }
 
@@ -342,6 +372,9 @@ export class ConnectionService {
   /**
    * Create an ack using a trust ping message for the connection with the specified connection id.
    *
+   * By default a trust ping message should elicit a response. If this is not desired the
+   * `config.responseRequested` property can be set to `false`.
+   *
    * @param connectionId the id of the connection for which to create a trust ping message
    * @param options optional trust ping options
    * @returns outbound message containing trust ping message
@@ -353,7 +386,6 @@ export class ConnectionService {
 
     // TODO:
     //  - create ack message
-    //  - allow for options
     //  - maybe this shouldn't be in the connection service?
     const trustPing = new TrustPingMessage(options)
 
@@ -410,6 +442,41 @@ export class ConnectionService {
     }
 
     return connection
+  }
+
+  /**
+   * Process a received {@link ProblemReportMessage}.
+   *
+   * @param messageContext The message context containing a connection problem report message
+   * @returns connection record associated with the connection problem report message
+   *
+   */
+  public async processProblemReport(
+    messageContext: InboundMessageContext<ConnectionProblemReportMessage>
+  ): Promise<ConnectionRecord> {
+    const { message: connectionProblemReportMessage, recipientVerkey, senderVerkey } = messageContext
+
+    this.logger.debug(`Processing connection problem report for verkey ${recipientVerkey}`)
+
+    if (!recipientVerkey) {
+      throw new AriesFrameworkError('Unable to process connection problem report without recipientVerkey')
+    }
+
+    const connectionRecord = await this.findByVerkey(recipientVerkey)
+
+    if (!connectionRecord) {
+      throw new AriesFrameworkError(
+        `Unable to process connection problem report: connection for verkey ${recipientVerkey} not found`
+      )
+    }
+
+    if (connectionRecord.theirKey && connectionRecord.theirKey !== senderVerkey) {
+      throw new AriesFrameworkError("Sender verkey doesn't match verkey of connection record")
+    }
+
+    connectionRecord.errorMessage = `${connectionProblemReportMessage.description.code} : ${connectionProblemReportMessage.description.en}`
+    await this.update(connectionRecord)
+    return connectionRecord
   }
 
   /**
@@ -483,8 +550,8 @@ export class ConnectionService {
       }
 
       // If message is received unpacked/, we need to make sure it included a ~service decorator
-      if (!message.service && (!messageContext.senderVerkey || !messageContext.recipientVerkey)) {
-        throw new AriesFrameworkError('Message without senderKey and recipientKey must have ~service decorator')
+      if (!message.service && !messageContext.recipientVerkey) {
+        throw new AriesFrameworkError('Message recipientKey must have ~service decorator')
       }
     }
   }
@@ -501,6 +568,10 @@ export class ConnectionService {
         previousState,
       },
     })
+  }
+
+  public update(connectionRecord: ConnectionRecord) {
+    return this.connectionRepository.update(connectionRecord)
   }
 
   /**
@@ -607,7 +678,7 @@ export class ConnectionService {
     tags?: CustomConnectionTags
     imageUrl?: string
   }): Promise<ConnectionRecord> {
-    const { endpoints, did, verkey, routingKeys } = options.routing
+    const { endpoints, did, verkey, routingKeys, mediatorId } = options.routing
 
     const publicKey = new Ed25119Sig2018({
       id: `${did}#1`,
@@ -652,6 +723,7 @@ export class ConnectionService {
       autoAcceptConnection: options.autoAcceptConnection,
       imageUrl: options.imageUrl,
       multiUseInvitation: options.multiUseInvitation,
+      mediatorId,
     })
 
     await this.connectionRepository.save(connectionRecord)
@@ -690,6 +762,7 @@ export interface Routing {
   verkey: string
   did: string
   routingKeys: string[]
+  mediatorId?: string
 }
 
 export interface ConnectionProtocolMsgReturnType<MessageType extends AgentMessage> {

@@ -5,9 +5,9 @@ import type { LinkedAttachment } from '../../../utils/LinkedAttachment'
 import type { ConnectionRecord } from '../../connections'
 import type { AutoAcceptCredential } from '../CredentialAutoAcceptType'
 import type { CredentialStateChangedEvent } from '../CredentialEvents'
-import type { ProposeCredentialMessageOptions } from '../messages'
+import type { CredentialProblemReportMessage, ProposeCredentialMessageOptions } from '../messages'
 
-import { scoped, Lifecycle } from 'tsyringe'
+import { Lifecycle, scoped } from 'tsyringe'
 
 import { AgentConfig } from '../../../agent/AgentConfig'
 import { EventEmitter } from '../../../agent/EventEmitter'
@@ -18,24 +18,26 @@ import { isLinkedAttachment } from '../../../utils/attachment'
 import { uuid } from '../../../utils/uuid'
 import { AckStatus } from '../../common'
 import { ConnectionService } from '../../connections/services/ConnectionService'
-import { IndyIssuerService, IndyHolderService } from '../../indy'
+import { IndyHolderService, IndyIssuerService } from '../../indy'
 import { IndyLedgerService } from '../../ledger/services/IndyLedgerService'
 import { CredentialEventTypes } from '../CredentialEvents'
 import { CredentialState } from '../CredentialState'
 import { CredentialUtils } from '../CredentialUtils'
+import { CredentialProblemReportError, CredentialProblemReportReason } from '../errors'
 import {
+  CredentialAckMessage,
+  CredentialPreview,
+  INDY_CREDENTIAL_ATTACHMENT_ID,
   INDY_CREDENTIAL_OFFER_ATTACHMENT_ID,
   INDY_CREDENTIAL_REQUEST_ATTACHMENT_ID,
   IssueCredentialMessage,
   OfferCredentialMessage,
   ProposeCredentialMessage,
-  CredentialPreview,
   RequestCredentialMessage,
-  CredentialAckMessage,
-  INDY_CREDENTIAL_ATTACHMENT_ID,
 } from '../messages'
 import { CredentialRepository } from '../repository'
 import { CredentialRecord } from '../repository/CredentialRecord'
+import { CredentialMetadataKeys } from '../repository/credentialMetadataTypes'
 
 @scoped(Lifecycle.ContainerScoped)
 export class CredentialService {
@@ -105,6 +107,13 @@ export class CredentialService {
       credentialAttributes: proposalMessage.credentialProposal?.attributes,
       autoAcceptCredential: config?.autoAcceptCredential,
     })
+
+    // Set the metadata
+    credentialRecord.metadata.set(CredentialMetadataKeys.IndyCredential, {
+      schemaId: options.schemaId,
+      credentialDefinitionId: options.credentialDefinitionId,
+    })
+
     await this.credentialRepository.save(credentialRecord)
     this.eventEmitter.emit<CredentialStateChangedEvent>({
       type: CredentialEventTypes.CredentialStateChanged,
@@ -187,6 +196,11 @@ export class CredentialService {
         state: CredentialState.ProposalReceived,
       })
 
+      credentialRecord.metadata.set(CredentialMetadataKeys.IndyCredential, {
+        schemaId: proposalMessage.schemaId,
+        credentialDefinitionId: proposalMessage.credentialDefinitionId,
+      })
+
       // Assert
       this.connectionService.assertConnectionOrServiceDecorator(messageContext)
 
@@ -200,7 +214,6 @@ export class CredentialService {
         },
       })
     }
-
     return credentialRecord
   }
 
@@ -244,8 +257,10 @@ export class CredentialService {
 
     credentialRecord.offerMessage = credentialOfferMessage
     credentialRecord.credentialAttributes = preview.attributes
-    credentialRecord.metadata.credentialDefinitionId = credOffer.cred_def_id
-    credentialRecord.metadata.schemaId = credOffer.schema_id
+    credentialRecord.metadata.set(CredentialMetadataKeys.IndyCredential, {
+      schemaId: credOffer.schema_id,
+      credentialDefinitionId: credOffer.cred_def_id,
+    })
     credentialRecord.linkedAttachments = attachments?.filter((attachment) => isLinkedAttachment(attachment))
     credentialRecord.autoAcceptCredential =
       credentialTemplate.autoAcceptCredential ?? credentialRecord.autoAcceptCredential
@@ -302,12 +317,13 @@ export class CredentialService {
       offerMessage: credentialOfferMessage,
       credentialAttributes: credentialPreview.attributes,
       linkedAttachments: linkedAttachments?.map((linkedAttachments) => linkedAttachments.attachment),
-      metadata: {
-        credentialDefinitionId: credOffer.cred_def_id,
-        schemaId: credOffer.schema_id,
-      },
       state: CredentialState.OfferSent,
       autoAcceptCredential: credentialTemplate.autoAcceptCredential,
+    })
+
+    credentialRecord.metadata.set(CredentialMetadataKeys.IndyCredential, {
+      credentialDefinitionId: credOffer.cred_def_id,
+      schemaId: credOffer.schema_id,
     })
 
     await this.credentialRepository.save(credentialRecord)
@@ -340,8 +356,9 @@ export class CredentialService {
 
     const indyCredentialOffer = credentialOfferMessage.indyCredentialOffer
     if (!indyCredentialOffer) {
-      throw new AriesFrameworkError(
-        `Missing required base64 encoded attachment data for credential offer with thread id ${credentialOfferMessage.threadId}`
+      throw new CredentialProblemReportError(
+        `Missing required base64 or json encoded attachment data for credential offer with thread id ${credentialOfferMessage.threadId}`,
+        { problemCode: CredentialProblemReportReason.IssuanceAbandoned }
       )
     }
 
@@ -357,11 +374,13 @@ export class CredentialService {
       })
 
       credentialRecord.offerMessage = credentialOfferMessage
-      credentialRecord.linkedAttachments = credentialOfferMessage.attachments?.filter((attachment) =>
-        isLinkedAttachment(attachment)
-      )
-      credentialRecord.metadata.credentialDefinitionId = indyCredentialOffer.cred_def_id
-      credentialRecord.metadata.schemaId = indyCredentialOffer.schema_id
+      credentialRecord.linkedAttachments = credentialOfferMessage.attachments?.filter(isLinkedAttachment)
+
+      credentialRecord.metadata.set(CredentialMetadataKeys.IndyCredential, {
+        schemaId: indyCredentialOffer.schema_id,
+        credentialDefinitionId: indyCredentialOffer.cred_def_id,
+      })
+
       await this.updateState(credentialRecord, CredentialState.OfferReceived)
     } catch {
       // No credential record exists with thread id
@@ -370,11 +389,12 @@ export class CredentialService {
         threadId: credentialOfferMessage.id,
         offerMessage: credentialOfferMessage,
         credentialAttributes: credentialOfferMessage.credentialPreview.attributes,
-        metadata: {
-          credentialDefinitionId: indyCredentialOffer.cred_def_id,
-          schemaId: indyCredentialOffer.schema_id,
-        },
         state: CredentialState.OfferReceived,
+      })
+
+      credentialRecord.metadata.set(CredentialMetadataKeys.IndyCredential, {
+        schemaId: indyCredentialOffer.schema_id,
+        credentialDefinitionId: indyCredentialOffer.cred_def_id,
       })
 
       // Assert
@@ -412,8 +432,9 @@ export class CredentialService {
     const credentialOffer = credentialRecord.offerMessage?.indyCredentialOffer
 
     if (!credentialOffer) {
-      throw new AriesFrameworkError(
-        `Missing required base64 encoded attachment data for credential offer with thread id ${credentialRecord.threadId}`
+      throw new CredentialProblemReportError(
+        `Missing required base64 or json encoded attachment data for credential offer with thread id ${credentialRecord.threadId}`,
+        { problemCode: CredentialProblemReportReason.IssuanceAbandoned }
       )
     }
 
@@ -440,7 +461,7 @@ export class CredentialService {
     })
     credentialRequest.setThread({ threadId: credentialRecord.threadId })
 
-    credentialRecord.metadata.requestMetadata = credReqMetadata
+    credentialRecord.metadata.set(CredentialMetadataKeys.IndyRequest, credReqMetadata)
     credentialRecord.requestMessage = credentialRequest
     credentialRecord.autoAcceptCredential = options?.autoAcceptCredential ?? credentialRecord.autoAcceptCredential
 
@@ -472,8 +493,9 @@ export class CredentialService {
     const indyCredentialRequest = credentialRequestMessage?.indyCredentialRequest
 
     if (!indyCredentialRequest) {
-      throw new AriesFrameworkError(
-        `Missing required base64 encoded attachment data for credential request with thread id ${credentialRequestMessage.threadId}`
+      throw new CredentialProblemReportError(
+        `Missing required base64 or json encoded attachment data for credential request with thread id ${credentialRequestMessage.threadId}`,
+        { problemCode: CredentialProblemReportReason.IssuanceAbandoned }
       )
     }
 
@@ -522,24 +544,27 @@ export class CredentialService {
     // Assert credential attributes
     const credentialAttributes = credentialRecord.credentialAttributes
     if (!credentialAttributes) {
-      throw new Error(
-        `Missing required credential attribute values on credential record with id ${credentialRecord.id}`
+      throw new CredentialProblemReportError(
+        `Missing required credential attribute values on credential record with id ${credentialRecord.id}`,
+        { problemCode: CredentialProblemReportReason.IssuanceAbandoned }
       )
     }
 
     // Assert Indy offer
     const indyCredentialOffer = offerMessage?.indyCredentialOffer
     if (!indyCredentialOffer) {
-      throw new AriesFrameworkError(
-        `Missing required base64 encoded attachment data for credential offer with thread id ${credentialRecord.threadId}`
+      throw new CredentialProblemReportError(
+        `Missing required base64 or json encoded attachment data for credential offer with thread id ${credentialRecord.threadId}`,
+        { problemCode: CredentialProblemReportReason.IssuanceAbandoned }
       )
     }
 
     // Assert Indy request
     const indyCredentialRequest = requestMessage?.indyCredentialRequest
     if (!indyCredentialRequest) {
-      throw new AriesFrameworkError(
-        `Missing required base64 encoded attachment data for credential request with thread id ${credentialRecord.threadId}`
+      throw new CredentialProblemReportError(
+        `Missing required base64 or json encoded attachment data for credential request with thread id ${credentialRecord.threadId}`,
+        { problemCode: CredentialProblemReportReason.IssuanceAbandoned }
       )
     }
 
@@ -604,14 +629,20 @@ export class CredentialService {
       previousSentMessage: credentialRecord.requestMessage,
     })
 
-    if (!credentialRecord.metadata.requestMetadata) {
-      throw new AriesFrameworkError(`Missing required request metadata for credential with id ${credentialRecord.id}`)
+    const credentialRequestMetadata = credentialRecord.metadata.get(CredentialMetadataKeys.IndyRequest)
+
+    if (!credentialRequestMetadata) {
+      throw new CredentialProblemReportError(
+        `Missing required request metadata for credential with id ${credentialRecord.id}`,
+        { problemCode: CredentialProblemReportReason.IssuanceAbandoned }
+      )
     }
 
     const indyCredential = issueCredentialMessage.indyCredential
     if (!indyCredential) {
-      throw new AriesFrameworkError(
-        `Missing required base64 encoded attachment data for credential with thread id ${issueCredentialMessage.threadId}`
+      throw new CredentialProblemReportError(
+        `Missing required base64 or json encoded attachment data for credential with thread id ${issueCredentialMessage.threadId}`,
+        { problemCode: CredentialProblemReportReason.IssuanceAbandoned }
       )
     }
 
@@ -619,7 +650,7 @@ export class CredentialService {
 
     const credentialId = await this.indyHolderService.storeCredential({
       credentialId: uuid(),
-      credentialRequestMetadata: credentialRecord.metadata.requestMetadata,
+      credentialRequestMetadata,
       credential: indyCredential,
       credentialDefinition,
     })
@@ -689,6 +720,33 @@ export class CredentialService {
     // Update record
     await this.updateState(credentialRecord, CredentialState.Done)
 
+    return credentialRecord
+  }
+
+  /**
+   * Process a received {@link ProblemReportMessage}.
+   *
+   * @param messageContext The message context containing a credential problem report message
+   * @returns credential record associated with the credential problem report message
+   *
+   */
+  public async processProblemReport(
+    messageContext: InboundMessageContext<CredentialProblemReportMessage>
+  ): Promise<CredentialRecord> {
+    const { message: credentialProblemReportMessage } = messageContext
+
+    const connection = messageContext.assertReadyConnection()
+
+    this.logger.debug(`Processing problem report with id ${credentialProblemReportMessage.id}`)
+
+    const credentialRecord = await this.getByThreadAndConnectionId(
+      credentialProblemReportMessage.threadId,
+      connection?.id
+    )
+
+    // Update record
+    credentialRecord.errorMessage = `${credentialProblemReportMessage.description.code}: ${credentialProblemReportMessage.description.en}`
+    await this.update(credentialRecord)
     return credentialRecord
   }
 

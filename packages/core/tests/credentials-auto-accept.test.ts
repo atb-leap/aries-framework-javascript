@@ -39,12 +39,10 @@ describe('auto accept credentials', () => {
     })
 
     afterAll(async () => {
-      await aliceAgent.shutdown({
-        deleteWallet: true,
-      })
-      await faberAgent.shutdown({
-        deleteWallet: true,
-      })
+      await faberAgent.shutdown()
+      await faberAgent.wallet.delete()
+      await aliceAgent.shutdown()
+      await aliceAgent.wallet.delete()
     })
 
     test('Alice starts with credential proposal to Faber, both with autoAcceptCredential on `always`', async () => {
@@ -73,9 +71,13 @@ describe('auto accept credentials', () => {
         offerMessage: expect.any(Object),
         requestMessage: expect.any(Object),
         metadata: {
-          requestMetadata: expect.any(Object),
-          schemaId,
-          credentialDefinitionId: credDefId,
+          data: {
+            '_internal/indyRequest': expect.any(Object),
+            '_internal/indyCredential': {
+              schemaId,
+              credentialDefinitionId: credDefId,
+            },
+          },
         },
         credentialId: expect.any(String),
         state: CredentialState.Done,
@@ -86,8 +88,12 @@ describe('auto accept credentials', () => {
         id: expect.any(String),
         createdAt: expect.any(Date),
         metadata: {
-          schemaId,
-          credentialDefinitionId: credDefId,
+          data: {
+            '_internal/indyCredential': {
+              schemaId,
+              credentialDefinitionId: credDefId,
+            },
+          },
         },
         offerMessage: expect.any(Object),
         requestMessage: expect.any(Object),
@@ -121,7 +127,15 @@ describe('auto accept credentials', () => {
         createdAt: expect.any(Date),
         offerMessage: expect.any(Object),
         requestMessage: expect.any(Object),
-        metadata: { requestMetadata: expect.any(Object) },
+        metadata: {
+          data: {
+            '_internal/indyRequest': expect.any(Object),
+            '_internal/indyCredential': {
+              schemaId,
+              credentialDefinitionId: credDefId,
+            },
+          },
+        },
         credentialId: expect.any(String),
         state: CredentialState.Done,
       })
@@ -147,12 +161,10 @@ describe('auto accept credentials', () => {
     })
 
     afterAll(async () => {
-      await aliceAgent.shutdown({
-        deleteWallet: true,
-      })
-      await faberAgent.shutdown({
-        deleteWallet: true,
-      })
+      await faberAgent.shutdown()
+      await faberAgent.wallet.delete()
+      await aliceAgent.shutdown()
+      await aliceAgent.wallet.delete()
     })
 
     test('Alice starts with credential proposal to Faber, both with autoAcceptCredential on `contentApproved`', async () => {
@@ -190,9 +202,13 @@ describe('auto accept credentials', () => {
         offerMessage: expect.any(Object),
         requestMessage: expect.any(Object),
         metadata: {
-          requestMetadata: expect.any(Object),
-          schemaId,
-          credentialDefinitionId: credDefId,
+          data: {
+            '_internal/indyRequest': expect.any(Object),
+            '_internal/indyCredential': {
+              schemaId,
+              credentialDefinitionId: credDefId,
+            },
+          },
         },
         credentialId: expect.any(String),
         state: CredentialState.Done,
@@ -203,8 +219,12 @@ describe('auto accept credentials', () => {
         id: expect.any(String),
         createdAt: expect.any(Date),
         metadata: {
-          schemaId,
-          credentialDefinitionId: credDefId,
+          data: {
+            '_internal/indyCredential': {
+              schemaId,
+              credentialDefinitionId: credDefId,
+            },
+          },
         },
         offerMessage: expect.any(Object),
         requestMessage: expect.any(Object),
@@ -278,7 +298,15 @@ describe('auto accept credentials', () => {
         createdAt: expect.any(Date),
         offerMessage: expect.any(Object),
         requestMessage: expect.any(Object),
-        metadata: { requestMetadata: expect.any(Object) },
+        metadata: {
+          data: {
+            '_internal/indyRequest': expect.any(Object),
+            '_internal/indyCredential': {
+              schemaId,
+              credentialDefinitionId: credDefId,
+            },
+          },
+        },
         credentialId: expect.any(String),
         state: CredentialState.Done,
       })

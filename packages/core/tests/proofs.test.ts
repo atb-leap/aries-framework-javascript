@@ -1,4 +1,4 @@
-import type { Agent, ConnectionRecord, PresentationPreview, ProofRequest } from '../src'
+import type { Agent, ConnectionRecord, PresentationPreview } from '../src'
 import type { CredDefId } from 'indy-sdk'
 
 import {
@@ -33,12 +33,10 @@ describe('Present Proof', () => {
 
   afterAll(async () => {
     testLogger.test('Shutting down both agents')
-    await aliceAgent.shutdown({
-      deleteWallet: true,
-    })
-    await faberAgent.shutdown({
-      deleteWallet: true,
-    })
+    await faberAgent.shutdown()
+    await faberAgent.wallet.delete()
+    await aliceAgent.shutdown()
+    await aliceAgent.wallet.delete()
   })
 
   test('Alice starts with proof proposal to Faber', async () => {
@@ -95,11 +93,9 @@ describe('Present Proof', () => {
 
     // Alice retrieves the requested credentials and accepts the presentation request
     testLogger.test('Alice accepts presentation request from Faber')
-    const indyProofRequest = aliceProofRecord.requestMessage?.indyProofRequest as ProofRequest
-    const retrievedCredentials = await aliceAgent.proofs.getRequestedCredentialsForProofRequest(
-      indyProofRequest,
-      presentationPreview
-    )
+    const retrievedCredentials = await aliceAgent.proofs.getRequestedCredentialsForProofRequest(aliceProofRecord.id, {
+      filterByPresentationPreview: true,
+    })
     const requestedCredentials = aliceAgent.proofs.autoSelectCredentialsForProofRequest(retrievedCredentials)
     await aliceAgent.proofs.acceptRequest(aliceProofRecord.id, requestedCredentials)
 
@@ -254,11 +250,9 @@ describe('Present Proof', () => {
 
     // Alice retrieves the requested credentials and accepts the presentation request
     testLogger.test('Alice accepts presentation request from Faber')
-    const indyProofRequest = aliceProofRecord.requestMessage?.indyProofRequest as ProofRequest
-    const retrievedCredentials = await aliceAgent.proofs.getRequestedCredentialsForProofRequest(
-      indyProofRequest,
-      presentationPreview
-    )
+    const retrievedCredentials = await aliceAgent.proofs.getRequestedCredentialsForProofRequest(aliceProofRecord.id, {
+      filterByPresentationPreview: true,
+    })
     const requestedCredentials = aliceAgent.proofs.autoSelectCredentialsForProofRequest(retrievedCredentials)
     await aliceAgent.proofs.acceptRequest(aliceProofRecord.id, requestedCredentials)
 

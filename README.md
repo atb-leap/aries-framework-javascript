@@ -52,10 +52,11 @@ Some features are not yet supported, but are on our roadmap. Check [the roadmap]
 
 - ✅ React Native
 - ✅ Node.JS
+- ✅ Report Problem Protocol ([RFC 0035](https://github.com/hyperledger/aries-rfcs/blob/main/features/0035-report-problem/README.md))
 - ✅ Issue Credential Protocol ([RFC 0036](https://github.com/hyperledger/aries-rfcs/blob/master/features/0036-issue-credential/README.md))
 - ✅ Present Proof Protocol ([RFC 0037](https://github.com/hyperledger/aries-rfcs/tree/master/features/0037-present-proof/README.md))
-- ✅ Connection Protocol ([RFC 0160](https://github.com/hyperledger/aries-rfcs/blob/master/features/0160-connection-protocol/README.md))
 - ✅ Basic Message Protocol ([RFC 0095](https://github.com/hyperledger/aries-rfcs/blob/master/features/0095-basic-message/README.md))
+- ✅ Connection Protocol ([RFC 0160](https://github.com/hyperledger/aries-rfcs/blob/master/features/0160-connection-protocol/README.md))
 - ✅ Mediator Coordination Protocol ([RFC 0211](https://github.com/hyperledger/aries-rfcs/blob/master/features/0211-route-coordination/README.md))
 - ✅ Indy Credentials (with `did:sov` support)
 - ✅ HTTP & WebSocket Transport
@@ -123,6 +124,8 @@ Now that your project is setup and everything seems to be working, it is time to
 6. [Credentials](/docs/getting-started/5-credentials.md)
 7. [Proofs](/docs/getting-started/6-proofs.md)
 8. [Logging](/docs/getting-started/7-logging.md)
+
+Also check out [Aries Framework JavaScript Extensions](https://github.com/hyperledger/aries-framework-javascript-ext), for several useful wrappers and plugins.
 
 ### Divergence from Aries RFCs
 

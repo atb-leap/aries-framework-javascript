@@ -2,7 +2,7 @@ import type { SubjectMessage } from '../../../tests/transport/SubjectInboundTran
 import type {
   AutoAcceptProof,
   BasicMessage,
-  BasicMessageReceivedEvent,
+  BasicMessageStateChangedEvent,
   ConnectionRecordProps,
   CredentialDefinitionTemplate,
   CredentialOfferTemplate,
@@ -184,17 +184,17 @@ export async function waitForCredentialRecord(
 
 export async function waitForBasicMessage(agent: Agent, { content }: { content?: string }): Promise<BasicMessage> {
   return new Promise((resolve) => {
-    const listener = (event: BasicMessageReceivedEvent) => {
+    const listener = (event: BasicMessageStateChangedEvent) => {
       const contentMatches = content === undefined || event.payload.message.content === content
 
       if (contentMatches) {
-        agent.events.off<BasicMessageReceivedEvent>(BasicMessageEventTypes.BasicMessageReceived, listener)
+        agent.events.off<BasicMessageStateChangedEvent>(BasicMessageEventTypes.BasicMessageStateChanged, listener)
 
         resolve(event.payload.message)
       }
     }
 
-    agent.events.on<BasicMessageReceivedEvent>(BasicMessageEventTypes.BasicMessageReceived, listener)
+    agent.events.on<BasicMessageStateChangedEvent>(BasicMessageEventTypes.BasicMessageStateChanged, listener)
   })
 }
 
@@ -469,11 +469,7 @@ export async function presentProof({
     state: ProofState.RequestReceived,
   })
 
-  const indyProofRequest = holderRecord.requestMessage?.indyProofRequest
-  if (!indyProofRequest) {
-    throw new Error('indyProofRequest missing')
-  }
-  const retrievedCredentials = await holderAgent.proofs.getRequestedCredentialsForProofRequest(indyProofRequest)
+  const retrievedCredentials = await holderAgent.proofs.getRequestedCredentialsForProofRequest(holderRecord.id)
   const requestedCredentials = holderAgent.proofs.autoSelectCredentialsForProofRequest(retrievedCredentials)
   await holderAgent.proofs.acceptRequest(holderRecord.id, requestedCredentials)
 
@@ -507,6 +503,14 @@ export async function presentProof({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function mockFunction<T extends (...args: any[]) => any>(fn: T): jest.MockedFunction<T> {
   return fn as jest.MockedFunction<T>
+}
+
+/**
+ * Set a property using a getter value on a mocked oject.
+ */
+// eslint-disable-next-line @typescript-eslint/ban-types
+export function mockProperty<T extends {}, K extends keyof T>(object: T, property: K, value: T[K]) {
+  Object.defineProperty(object, property, { get: () => value })
 }
 
 export async function setupCredentialTests(

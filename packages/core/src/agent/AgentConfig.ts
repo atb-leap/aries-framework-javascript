@@ -15,6 +15,7 @@ import { DidCommMimeType } from '../types'
 
 export class AgentConfig {
   private initConfig: InitConfig
+  public label: string
   public logger: Logger
   public readonly agentDependencies: AgentDependencies
   public readonly fileSystem: FileSystem
@@ -24,6 +25,7 @@ export class AgentConfig {
 
   public constructor(initConfig: InitConfig, agentDependencies: AgentDependencies) {
     this.initConfig = initConfig
+    this.label = initConfig.label
     this.logger = initConfig.logger ?? new ConsoleLogger(LogLevel.off)
     this.agentDependencies = agentDependencies
     this.fileSystem = new agentDependencies.FileSystem()
@@ -38,8 +40,8 @@ export class AgentConfig {
     }
   }
 
-  public get label() {
-    return this.initConfig.label
+  public get connectToIndyLedgersOnStartup() {
+    return this.initConfig.connectToIndyLedgersOnStartup ?? true
   }
 
   public get publicDidSeed() {

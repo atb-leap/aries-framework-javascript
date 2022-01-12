@@ -31,12 +31,10 @@ describe('Auto accept present proof', () => {
     })
 
     afterAll(async () => {
-      await aliceAgent.shutdown({
-        deleteWallet: true,
-      })
-      await faberAgent.shutdown({
-        deleteWallet: true,
-      })
+      await faberAgent.shutdown()
+      await faberAgent.wallet.delete()
+      await aliceAgent.shutdown()
+      await aliceAgent.wallet.delete()
     })
 
     test('Alice starts with proof proposal to Faber, both with autoAcceptProof on `always`', async () => {
@@ -114,12 +112,10 @@ describe('Auto accept present proof', () => {
     })
 
     afterAll(async () => {
-      await aliceAgent.shutdown({
-        deleteWallet: true,
-      })
-      await faberAgent.shutdown({
-        deleteWallet: true,
-      })
+      await faberAgent.shutdown()
+      await faberAgent.wallet.delete()
+      await aliceAgent.shutdown()
+      await aliceAgent.wallet.delete()
     })
 
     test('Alice starts with proof proposal to Faber, both with autoacceptproof on `contentApproved`', async () => {
@@ -188,12 +184,9 @@ describe('Auto accept present proof', () => {
       })
 
       testLogger.test('Alice accepts presentation request from Faber')
-      const indyProofRequest = aliceProofRecord.requestMessage?.indyProofRequest
-      const retrievedCredentials = await aliceAgent.proofs.getRequestedCredentialsForProofRequest(
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        indyProofRequest!,
-        presentationPreview
-      )
+      const retrievedCredentials = await aliceAgent.proofs.getRequestedCredentialsForProofRequest(aliceProofRecord.id, {
+        filterByPresentationPreview: true,
+      })
       const requestedCredentials = aliceAgent.proofs.autoSelectCredentialsForProofRequest(retrievedCredentials)
       await aliceAgent.proofs.acceptRequest(aliceProofRecord.id, requestedCredentials)
 

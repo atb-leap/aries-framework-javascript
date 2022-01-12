@@ -1,6 +1,6 @@
 import type { DidCommService, ConnectionRecord } from '../modules/connections'
 import type { OutboundTransport } from '../transport/OutboundTransport'
-import type { OutboundMessage, OutboundPackage, WireMessage } from '../types'
+import type { OutboundMessage, OutboundPackage, EncryptedMessage } from '../types'
 import type { AgentMessage } from './AgentMessage'
 import type { EnvelopeKeys } from './EnvelopeService'
 import type { TransportSession } from './TransportService'
@@ -12,6 +12,7 @@ import { ReturnRouteTypes } from '../decorators/transport/TransportDecorator'
 import { AriesFrameworkError } from '../error'
 import { Logger } from '../logger'
 import { MessageRepository } from '../storage/MessageRepository'
+import { MessageValidator } from '../utils/MessageValidator'
 
 import { EnvelopeService } from './EnvelopeService'
 import { TransportService } from './TransportService'
@@ -55,10 +56,10 @@ export class MessageSender {
     message: AgentMessage
     endpoint: string
   }): Promise<OutboundPackage> {
-    const wireMessage = await this.envelopeService.packMessage(message, keys)
+    const encryptedMessage = await this.envelopeService.packMessage(message, keys)
 
     return {
-      payload: wireMessage,
+      payload: encryptedMessage,
       responseRequested: message.hasAnyReturnRoute(),
       endpoint,
     }
@@ -71,28 +72,30 @@ export class MessageSender {
     if (!session.keys) {
       throw new AriesFrameworkError(`There are no keys for the given ${session.type} transport session.`)
     }
-    const wireMessage = await this.envelopeService.packMessage(message, session.keys)
-
-    await session.send(wireMessage)
+    const encryptedMessage = await this.envelopeService.packMessage(message, session.keys)
+    await session.send(encryptedMessage)
   }
 
   public async sendPackage({
     connection,
-    packedMessage,
+    encryptedMessage,
     options,
   }: {
     connection: ConnectionRecord
-    packedMessage: WireMessage
+    encryptedMessage: EncryptedMessage
     options?: { transportPriority?: TransportPriorityOptions }
   }) {
+    const errors: Error[] = []
+
     // Try to send to already open session
     const session = this.transportService.findSessionByConnectionId(connection.id)
     if (session?.inboundMessage?.hasReturnRouting()) {
       try {
-        await session.send(packedMessage)
+        await session.send(encryptedMessage)
         return
       } catch (error) {
-        this.logger.info(`Sending packed message via session failed with error: ${error.message}.`, error)
+        errors.push(error)
+        this.logger.debug(`Sending packed message via session failed with error: ${error.message}.`, error)
       }
     }
 
@@ -110,7 +113,7 @@ export class MessageSender {
         for (const transport of this.outboundTransports) {
           if (transport.supportedSchemes.includes(service.protocolScheme)) {
             await transport.sendMessage({
-              payload: packedMessage,
+              payload: encryptedMessage,
               endpoint: service.serviceEndpoint,
               connectionId: connection.id,
             })
@@ -133,13 +136,15 @@ export class MessageSender {
     // If the other party shared a queue service endpoint in their did doc we queue the message
     if (queueService) {
       this.logger.debug(`Queue packed message for connection ${connection.id} (${connection.theirLabel})`)
-      this.messageRepository.add(connection.id, packedMessage)
+      this.messageRepository.add(connection.id, encryptedMessage)
       return
     }
 
     // Message is undeliverable
     this.logger.error(`Message is undeliverable to connection ${connection.id} (${connection.theirLabel})`, {
-      message: packedMessage,
+      message: encryptedMessage,
+      errors,
+      connection,
     })
     throw new AriesFrameworkError(`Message is undeliverable to connection ${connection.id} (${connection.theirLabel})`)
   }
@@ -151,6 +156,7 @@ export class MessageSender {
     }
   ) {
     const { connection, payload } = outboundMessage
+    const errors: Error[] = []
 
     this.logger.debug('Send outbound message', {
       message: payload,
@@ -165,7 +171,8 @@ export class MessageSender {
         await this.sendMessageToSession(session, payload)
         return
       } catch (error) {
-        this.logger.info(`Sending an outbound message via session failed with error: ${error.message}.`, error)
+        errors.push(error)
+        this.logger.debug(`Sending an outbound message via session failed with error: ${error.message}.`, error)
       }
     }
 
@@ -187,6 +194,7 @@ export class MessageSender {
         })
         return
       } catch (error) {
+        errors.push(error)
         this.logger.debug(
           `Sending outbound message to service with id ${service.id} failed with the following error:`,
           {
@@ -208,14 +216,16 @@ export class MessageSender {
         senderKey: connection.verkey,
       }
 
-      const wireMessage = await this.envelopeService.packMessage(payload, keys)
-      this.messageRepository.add(connection.id, wireMessage)
+      const encryptedMessage = await this.envelopeService.packMessage(payload, keys)
+      this.messageRepository.add(connection.id, encryptedMessage)
       return
     }
 
     // Message is undeliverable
     this.logger.error(`Message is undeliverable to connection ${connection.id} (${connection.theirLabel})`, {
       message: payload,
+      errors,
+      connection,
     })
     throw new AriesFrameworkError(`Message is undeliverable to connection ${connection.id} (${connection.theirLabel})`)
   }
@@ -248,6 +258,20 @@ export class MessageSender {
     // Set return routing for message if requested
     if (returnRoute) {
       message.setReturnRouting(ReturnRouteTypes.all)
+    }
+
+    try {
+      await MessageValidator.validate(message)
+    } catch (error) {
+      this.logger.error(
+        `Aborting sending outbound message ${message.type} to ${service.serviceEndpoint}. Message validation failed`,
+        {
+          errors: error,
+          message: message.toJSON(),
+        }
+      )
+
+      throw error
     }
 
     const outboundPackage = await this.packMessage({ message, keys, endpoint: service.serviceEndpoint })

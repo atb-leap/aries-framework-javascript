@@ -10,6 +10,7 @@ import { Lifecycle, scoped } from 'tsyringe'
 import { AgentConfig } from '../agent/AgentConfig'
 import { AriesFrameworkError } from '../error/AriesFrameworkError'
 
+import { ProblemReportMessage } from './../modules/problem-reports/messages/ProblemReportMessage'
 import { EventEmitter } from './EventEmitter'
 import { AgentEventTypes } from './Events'
 import { MessageSender } from './MessageSender'
@@ -45,14 +46,27 @@ class Dispatcher {
     try {
       outboundMessage = await handler.handle(messageContext)
     } catch (error) {
-      this.logger.error(`Error handling message with type ${message.type}`, {
-        message: message.toJSON(),
-        senderVerkey: messageContext.senderVerkey,
-        recipientVerkey: messageContext.recipientVerkey,
-        connectionId: messageContext.connection?.id,
-      })
+      const problemReportMessage = error.problemReport
 
-      throw error
+      if (problemReportMessage instanceof ProblemReportMessage && messageContext.connection) {
+        problemReportMessage.setThread({
+          threadId: messageContext.message.threadId,
+        })
+        outboundMessage = {
+          payload: problemReportMessage,
+          connection: messageContext.connection,
+        }
+      } else {
+        this.logger.error(`Error handling message with type ${message.type}`, {
+          message: message.toJSON(),
+          error,
+          senderVerkey: messageContext.senderVerkey,
+          recipientVerkey: messageContext.recipientVerkey,
+          connectionId: messageContext.connection?.id,
+        })
+
+        throw error
+      }
     }
 
     if (outboundMessage && isOutboundServiceMessage(outboundMessage)) {
@@ -92,10 +106,28 @@ class Dispatcher {
     }
   }
 
+  /**
+   * Returns array of message types that dispatcher is able to handle.
+   * Message type format is MTURI specified at https://github.com/hyperledger/aries-rfcs/blob/main/concepts/0003-protocols/README.md#mturi.
+   */
   public get supportedMessageTypes() {
     return this.handlers
       .reduce<typeof AgentMessage[]>((all, cur) => [...all, ...cur.supportedMessages], [])
       .map((m) => m.type)
+  }
+
+  /**
+   * Returns array of protocol IDs that dispatcher is able to handle.
+   * Protocol ID format is PIURI specified at https://github.com/hyperledger/aries-rfcs/blob/main/concepts/0003-protocols/README.md#piuri.
+   */
+  public get supportedProtocols() {
+    return Array.from(new Set(this.supportedMessageTypes.map((m) => m.substring(0, m.lastIndexOf('/')))))
+  }
+
+  public filterSupportedProtocolsByMessageFamilies(messageFamilies: string[]) {
+    return this.supportedProtocols.filter((protocolId) =>
+      messageFamilies.find((messageFamily) => protocolId.startsWith(messageFamily))
+    )
   }
 }
 

@@ -1,6 +1,7 @@
 import type { TagsBase } from '../../../storage/BaseRecord'
 import type { AutoAcceptCredential } from '../CredentialAutoAcceptType'
 import type { CredentialState } from '../CredentialState'
+import type { CredentialMetadata } from './credentialMetadataTypes'
 
 import { Type } from 'class-transformer'
 
@@ -9,19 +10,13 @@ import { AriesFrameworkError } from '../../../error'
 import { BaseRecord } from '../../../storage/BaseRecord'
 import { uuid } from '../../../utils/uuid'
 import {
-  ProposeCredentialMessage,
-  IssueCredentialMessage,
-  RequestCredentialMessage,
-  OfferCredentialMessage,
   CredentialPreviewAttribute,
+  IssueCredentialMessage,
+  OfferCredentialMessage,
+  ProposeCredentialMessage,
+  RequestCredentialMessage,
 } from '../messages'
 import { CredentialInfo } from '../models/CredentialInfo'
-
-export interface CredentialRecordMetadata {
-  requestMetadata?: Record<string, unknown>
-  credentialDefinitionId?: string
-  schemaId?: string
-}
 
 export interface CredentialRecordProps {
   id?: string
@@ -31,7 +26,6 @@ export interface CredentialRecordProps {
   threadId: string
 
   credentialId?: string
-  metadata?: CredentialRecordMetadata
   tags?: CustomCredentialTags
   proposalMessage?: ProposeCredentialMessage
   offerMessage?: OfferCredentialMessage
@@ -40,6 +34,7 @@ export interface CredentialRecordProps {
   credentialAttributes?: CredentialPreviewAttribute[]
   autoAcceptCredential?: AutoAcceptCredential
   linkedAttachments?: Attachment[]
+  errorMessage?: string
 }
 
 export type CustomCredentialTags = TagsBase
@@ -50,13 +45,13 @@ export type DefaultCredentialTags = {
   credentialId?: string
 }
 
-export class CredentialRecord extends BaseRecord<DefaultCredentialTags, CustomCredentialTags> {
+export class CredentialRecord extends BaseRecord<DefaultCredentialTags, CustomCredentialTags, CredentialMetadata> {
   public connectionId?: string
   public threadId!: string
   public credentialId?: string
   public state!: CredentialState
-  public metadata!: CredentialRecordMetadata
   public autoAcceptCredential?: AutoAcceptCredential
+  public errorMessage?: string
 
   // message data
   @Type(() => ProposeCredentialMessage)
@@ -85,7 +80,6 @@ export class CredentialRecord extends BaseRecord<DefaultCredentialTags, CustomCr
       this.createdAt = props.createdAt ?? new Date()
       this.state = props.state
       this.connectionId = props.connectionId
-      this.metadata = props.metadata ?? {}
       this.credentialId = props.credentialId
       this.threadId = props.threadId
       this._tags = props.tags ?? {}
@@ -97,6 +91,7 @@ export class CredentialRecord extends BaseRecord<DefaultCredentialTags, CustomCr
       this.credentialAttributes = props.credentialAttributes
       this.autoAcceptCredential = props.autoAcceptCredential
       this.linkedAttachments = props.linkedAttachments
+      this.errorMessage = props.errorMessage
     }
   }
 
@@ -124,10 +119,7 @@ export class CredentialRecord extends BaseRecord<DefaultCredentialTags, CustomCr
     return new CredentialInfo({
       claims,
       attachments: this.linkedAttachments,
-      metadata: {
-        credentialDefinitionId: this.metadata.credentialDefinitionId,
-        schemaId: this.metadata.schemaId,
-      },
+      metadata: this.metadata.data,
     })
   }
 

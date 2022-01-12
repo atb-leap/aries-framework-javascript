@@ -2,9 +2,10 @@
   "name": "@aries-framework/node",
   "main": "build/index",
   "types": "build/index",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "files": [
-    "build"
+    "build",
+    "bin"
   ],
   "license": "Apache-2.0",
   "publishConfig": {
@@ -16,6 +17,9 @@
     "url": "https://github.com/hyperledger/aries-framework-javascript",
     "directory": "packages/node"
   },
+  "bin": {
+    "is-indy-installed": "bin/is-indy-installed.js"
+  },
   "scripts": {
     "build": "yarn run clean && yarn run compile",
     "clean": "rimraf -rf ./build",
@@ -24,7 +28,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@aries-framework/core": "*",
+    "@aries-framework/core": "0.1.0",
     "express": "^4.17.1",
     "indy-sdk": "^1.16.0-dev-1636",
     "node-fetch": "^2.6.1",

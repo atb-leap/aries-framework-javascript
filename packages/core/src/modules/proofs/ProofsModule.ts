@@ -16,12 +16,15 @@ import { ConnectionService } from '../connections/services/ConnectionService'
 import { MediationRecipientService } from '../routing/services/MediationRecipientService'
 
 import { ProofResponseCoordinator } from './ProofResponseCoordinator'
+import { PresentationProblemReportReason } from './errors'
 import {
   ProposePresentationHandler,
   RequestPresentationHandler,
   PresentationAckHandler,
   PresentationHandler,
+  PresentationProblemReportHandler,
 } from './handlers'
+import { PresentationProblemReportMessage } from './messages/PresentationProblemReportMessage'
 import { ProofRequest } from './models/ProofRequest'
 import { ProofService } from './services'
 
@@ -271,6 +274,17 @@ export class ProofsModule {
   }
 
   /**
+   * Declines a proof request as holder
+   * @param proofRecordId the id of the proof request to be declined
+   * @returns proof record that was declined
+   */
+  public async declineRequest(proofRecordId: string) {
+    const proofRecord = await this.proofService.getById(proofRecordId)
+    await this.proofService.declineRequest(proofRecord)
+    return proofRecord
+  }
+
+  /**
    * Accept a presentation as prover (by sending a presentation acknowledgement message) to the connection
    * associated with the proof record.
    *
@@ -317,15 +331,30 @@ export class ProofsModule {
    * If restrictions allow, self attested attributes will be used.
    *
    *
-   * @param proofRequest The proof request to build the requested credentials object from
-   * @param presentationProposal Optional presentation proposal to improve credential selection algorithm
+   * @param proofRecordId the id of the proof request to get the matching credentials for
+   * @param config optional configuration for credential selection process. Use `filterByPresentationPreview` (default `true`) to only include
+   *  credentials that match the presentation preview from the presentation proposal (if available).
+
    * @returns RetrievedCredentials object
    */
   public async getRequestedCredentialsForProofRequest(
-    proofRequest: ProofRequest,
-    presentationProposal?: PresentationPreview
+    proofRecordId: string,
+    config?: GetRequestedCredentialsConfig
   ): Promise<RetrievedCredentials> {
-    return this.proofService.getRequestedCredentialsForProofRequest(proofRequest, presentationProposal)
+    const proofRecord = await this.proofService.getById(proofRecordId)
+
+    const indyProofRequest = proofRecord.requestMessage?.indyProofRequest
+    const presentationPreview = config?.filterByPresentationPreview
+      ? proofRecord.proposalMessage?.presentationProposal
+      : undefined
+
+    if (!indyProofRequest) {
+      throw new AriesFrameworkError(
+        'Unable to get requested credentials for proof request. No proof request message was found or the proof request message does not contain an indy proof request.'
+      )
+    }
+
+    return this.proofService.getRequestedCredentialsForProofRequest(indyProofRequest, presentationPreview)
   }
 
   /**
@@ -340,6 +369,33 @@ export class ProofsModule {
    */
   public autoSelectCredentialsForProofRequest(retrievedCredentials: RetrievedCredentials): RequestedCredentials {
     return this.proofService.autoSelectCredentialsForProofRequest(retrievedCredentials)
+  }
+
+  /**
+   * Send problem report message for a proof record
+   * @param proofRecordId  The id of the proof record for which to send problem report
+   * @param message message to send
+   * @returns proof record associated with the proof problem report message
+   */
+  public async sendProblemReport(proofRecordId: string, message: string) {
+    const record = await this.proofService.getById(proofRecordId)
+    if (!record.connectionId) {
+      throw new AriesFrameworkError(`No connectionId found for proof record '${record.id}'.`)
+    }
+    const connection = await this.connectionService.getById(record.connectionId)
+    const presentationProblemReportMessage = new PresentationProblemReportMessage({
+      description: {
+        en: message,
+        code: PresentationProblemReportReason.Abandoned,
+      },
+    })
+    presentationProblemReportMessage.setThread({
+      threadId: record.threadId,
+    })
+    const outboundMessage = createOutboundMessage(connection, presentationProblemReportMessage)
+    await this.messageSender.sendMessage(outboundMessage)
+
+    return record
   }
 
   /**
@@ -400,6 +456,7 @@ export class ProofsModule {
       new PresentationHandler(this.proofService, this.agentConfig, this.proofResponseCoordinator)
     )
     dispatcher.registerHandler(new PresentationAckHandler(this.proofService))
+    dispatcher.registerHandler(new PresentationProblemReportHandler(this.proofService))
   }
 }
 
@@ -410,4 +467,13 @@ export type CreateProofRequestOptions = Partial<
 export interface ProofRequestConfig {
   comment?: string
   autoAcceptProof?: AutoAcceptProof
+}
+
+export interface GetRequestedCredentialsConfig {
+  /**
+   * Whether to filter the retrieved credentials using the presentation preview.
+   * This configuration will only have effect if a presentation proposal message is available
+   * containing a presentation preview.
+   */
+  filterByPresentationPreview?: boolean
 }

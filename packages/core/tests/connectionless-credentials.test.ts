@@ -70,8 +70,10 @@ describe('credentials', () => {
   })
 
   afterEach(async () => {
-    await faberAgent.shutdown({ deleteWallet: true })
-    await aliceAgent.shutdown({ deleteWallet: true })
+    await faberAgent.shutdown()
+    await faberAgent.wallet.delete()
+    await aliceAgent.shutdown()
+    await aliceAgent.wallet.delete()
   })
 
   test('Faber starts with connection-less credential offer to Alice', async () => {
@@ -123,7 +125,13 @@ describe('credentials', () => {
       createdAt: expect.any(Date),
       offerMessage: expect.any(Object),
       requestMessage: expect.any(Object),
-      metadata: { requestMetadata: expect.any(Object) },
+      metadata: {
+        data: {
+          '_internal/indyCredential': {
+            credentialDefinitionId: credDefId,
+          },
+        },
+      },
       credentialId: expect.any(String),
       state: CredentialState.Done,
       threadId: expect.any(String),
@@ -135,6 +143,13 @@ describe('credentials', () => {
       createdAt: expect.any(Date),
       offerMessage: expect.any(Object),
       requestMessage: expect.any(Object),
+      metadata: {
+        data: {
+          '_internal/indyCredential': {
+            credentialDefinitionId: credDefId,
+          },
+        },
+      },
       state: CredentialState.Done,
       threadId: expect.any(String),
     })
@@ -178,7 +193,13 @@ describe('credentials', () => {
       createdAt: expect.any(Date),
       offerMessage: expect.any(Object),
       requestMessage: expect.any(Object),
-      metadata: { requestMetadata: expect.any(Object) },
+      metadata: {
+        data: {
+          '_internal/indyCredential': {
+            credentialDefinitionId: credDefId,
+          },
+        },
+      },
       credentialId: expect.any(String),
       state: CredentialState.Done,
       threadId: expect.any(String),

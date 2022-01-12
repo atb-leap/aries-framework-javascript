@@ -1,6 +1,7 @@
 import type { AgentMessage } from '../../../agent/AgentMessage'
 import type { InboundMessageContext } from '../../../agent/models/InboundMessageContext'
 import type { ConnectionRecord } from '../../connections'
+import type { Routing } from '../../connections/services/ConnectionService'
 import type { MediationStateChangedEvent, KeylistUpdatedEvent } from '../RoutingEvents'
 import type { MediationGrantMessage, MediationDenyMessage, KeylistUpdateResponseMessage } from '../messages'
 
@@ -154,7 +155,17 @@ export class MediationRecipientService {
     return keylistUpdateMessage
   }
 
-  public async getRouting(mediationRecord?: MediationRecord) {
+  public async getRouting({ mediatorId, useDefaultMediator = true }: GetRoutingOptions = {}): Promise<Routing> {
+    let mediationRecord: MediationRecord | null = null
+
+    if (mediatorId) {
+      mediationRecord = await this.getById(mediatorId)
+    } else if (useDefaultMediator) {
+      // If no mediatorId is provided, and useDefaultMediator is true (default)
+      // We use the default mediator if available
+      mediationRecord = await this.findDefaultMediator()
+    }
+
     let endpoints = this.config.endpoints
     let routingKeys: string[] = []
 
@@ -168,7 +179,7 @@ export class MediationRecipientService {
     } else {
       // TODO: check that recipient keys are in wallet
     }
-    return { mediationRecord, endpoints, routingKeys, did, verkey }
+    return { endpoints, routingKeys, did, verkey, mediatorId: mediationRecord?.id }
   }
 
   public async saveRoute(recipientKey: string, mediationRecord: MediationRecord) {
@@ -286,4 +297,17 @@ export class MediationRecipientService {
 export interface MediationProtocolMsgReturnType<MessageType extends AgentMessage> {
   message: MessageType
   mediationRecord: MediationRecord
+}
+
+export interface GetRoutingOptions {
+  /**
+   * Identifier of the mediator to use when setting up routing
+   */
+  mediatorId?: string
+
+  /**
+   * Whether to use the default mediator if available and `mediatorId` has not been provided
+   * @default true
+   */
+  useDefaultMediator?: boolean
 }
