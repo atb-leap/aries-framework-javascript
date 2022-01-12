@@ -25,7 +25,7 @@ import {
   ConnectionRequestMessage,
   ConnectionResponseMessage,
   TrustPingMessage,
-  TrustPingMessageOptions
+  TrustPingMessageOptions,
 } from '../messages'
 import {
   Connection,
@@ -379,7 +379,10 @@ export class ConnectionService {
    * @param options optional trust ping options
    * @returns outbound message containing trust ping message
    */
-   public async createAck(connectionId: string, options: TrustPingMessageOptions = {}): Promise<ConnectionProtocolMsgReturnType<TrustPingMessage>> {
+  public async createAck(
+    connectionId: string,
+    options: TrustPingMessageOptions = {}
+  ): Promise<ConnectionProtocolMsgReturnType<TrustPingMessage>> {
     const connectionRecord = await this.connectionRepository.getById(connectionId)
 
     connectionRecord.assertState([ConnectionState.Responded, ConnectionState.Complete])
@@ -404,20 +407,23 @@ export class ConnectionService {
    * @param options optional trust ping options
    * @returns outbound message containing trust ping message
    */
-     public async createTrustPing(connectionId: string, options: TrustPingMessageOptions = {}): Promise<ConnectionProtocolMsgReturnType<TrustPingMessage>> {
-      const connectionRecord = await this.connectionRepository.getById(connectionId)
-  
-      // TODO:
-      //  - create ack message
-      //  - allow for options
-      //  - maybe this shouldn't be in the connection service?
-      const trustPing = new TrustPingMessage(options)
-  
-      return {
-        connectionRecord: connectionRecord,
-        message: trustPing,
-      }
+  public async createTrustPing(
+    connectionId: string,
+    options: TrustPingMessageOptions = {}
+  ): Promise<ConnectionProtocolMsgReturnType<TrustPingMessage>> {
+    const connectionRecord = await this.connectionRepository.getById(connectionId)
+
+    // TODO:
+    //  - create ack message
+    //  - allow for options
+    //  - maybe this shouldn't be in the connection service?
+    const trustPing = new TrustPingMessage(options)
+
+    return {
+      connectionRecord: connectionRecord,
+      message: trustPing,
     }
+  }
 
   /**
    * Process a received ack message. This will update the state of the connection
