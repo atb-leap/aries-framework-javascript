@@ -3,7 +3,7 @@ import type { InboundMessageContext } from '../../../agent/models/InboundMessage
 import type { Logger } from '../../../logger'
 import type { AckMessage } from '../../common'
 import type { ConnectionStateChangedEvent } from '../ConnectionEvents'
-import type { ConnectionProblemReportMessage } from '../messages'
+import type { ConnectionProblemReportMessage, TrustPingMessageOptions } from '../messages'
 import type { CustomConnectionTags } from '../repository/ConnectionRecord'
 
 import { firstValueFrom, ReplaySubject } from 'rxjs'
@@ -25,7 +25,6 @@ import {
   ConnectionRequestMessage,
   ConnectionResponseMessage,
   TrustPingMessage,
-  TrustPingMessageOptions,
 } from '../messages'
 import {
   Connection,
