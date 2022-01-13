@@ -295,7 +295,9 @@ export class RecipientModule {
       this.logger.debug('Processed mediation invitation', {
         connectionId: invitationConnectionRecord,
       })
-      const { message, connectionRecord } = await this.connectionService.createRequest(invitationConnectionRecord.id)
+      const { message, connectionRecord } = await this.connectionService.createRequest(invitationConnectionRecord.id, {
+        autoAcceptConnection: true,
+      })
       const outbound = createOutboundMessage(connectionRecord, message)
       await this.messageSender.sendMessage(outbound)
 

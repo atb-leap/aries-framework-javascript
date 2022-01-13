@@ -181,10 +181,9 @@ export class ConnectionService {
     })
 
     if (autoAcceptConnection !== undefined || autoAcceptConnection !== null) {
-      connectionRecord.autoAcceptConnection = config?.autoAcceptConnection
+      connectionRecord.autoAcceptConnection = autoAcceptConnection
     }
 
-    connectionRecord.autoAcceptConnection = config?.autoAcceptConnection
     await this.updateState(connectionRecord, ConnectionState.Requested)
 
     return {
